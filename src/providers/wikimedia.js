@@ -52,7 +52,9 @@ function mapPage(page, assetType) {
     title: page.title?.replace(/^File:/, "") || "Untitled",
     creator: value("Artist") || "Unknown creator",
     assetType,
-    previewUrl: info.thumburl || (info.mime?.startsWith("image/") ? info.url : null),
+    previewUrl: info.mime?.startsWith("audio/") || info.mime?.startsWith("video/")
+      ? info.url
+      : info.thumburl || info.url || null,
     mediaUrl: info.url,
     sourceUrl: info.descriptionurl,
     priceUsd: 0,

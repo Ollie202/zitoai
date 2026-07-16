@@ -165,9 +165,17 @@ function render(body) {
 }
 
 function card(asset, index) {
-  const preview = asset.assetType === "image" || asset.assetType === "video"
-    ? asset.previewUrl ? `<img src="${escapeAttribute(asset.previewUrl)}" alt="" loading="lazy">` : "No visual preview"
-    : asset.previewUrl ? `<audio controls preload="none" src="${escapeAttribute(asset.previewUrl)}"></audio>` : "Audio preview unavailable";
+  const audioUrl = asset.previewUrl || asset.mediaUrl;
+  let preview;
+  if (asset.assetType === "image") {
+    preview = asset.previewUrl ? `<img src="${escapeAttribute(asset.previewUrl)}" alt="" loading="lazy">` : "Image preview unavailable";
+  } else if (asset.assetType === "video") {
+    preview = asset.mediaUrl
+      ? `<video controls preload="metadata" src="${escapeAttribute(asset.mediaUrl)}" ${asset.previewUrl ? `poster="${escapeAttribute(asset.previewUrl)}"` : ""}></video>`
+      : asset.previewUrl ? `<img src="${escapeAttribute(asset.previewUrl)}" alt="Video thumbnail" loading="lazy">` : "Video preview unavailable";
+  } else {
+    preview = audioUrl ? `<audio controls preload="metadata" src="${escapeAttribute(audioUrl)}"></audio>` : "Audio preview unavailable";
+  }
   const warnings = (asset.policy.warnings || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   const price = asset.priceUsd == null ? "Check price" : asset.priceUsd === 0 ? "Free" : `$${asset.priceUsd}`;
   const source = asset.sourceUrl ? `<a href="${escapeAttribute(asset.sourceUrl)}" target="_blank" rel="noreferrer">Original source</a>` : "";

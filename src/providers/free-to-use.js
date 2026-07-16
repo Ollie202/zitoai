@@ -24,7 +24,7 @@ export const freeToUseProvider = {
       title: track.title,
       creator: artistNames(track.artists),
       assetType: "music",
-      previewUrl: track.thumbnails?.md || track.thumbnails?.sm || null,
+      previewUrl: track.files?.mp3 || null,
       mediaUrl: track.files?.mp3 || null,
       sourceUrl: `https://freetouse.com/music/${track.id}`,
       priceUsd: track.is_premium ? null : 0,

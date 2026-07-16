@@ -21,7 +21,9 @@ export const openverseProvider = {
       title: item.title || "Untitled",
       creator: item.creator || "Unknown creator",
       assetType: brief.assetType,
-      previewUrl: item.thumbnail || item.waveform || null,
+      previewUrl: brief.assetType === "image"
+        ? item.thumbnail || item.url || null
+        : item.url || null,
       mediaUrl: item.url || null,
       sourceUrl: item.foreign_landing_url || item.detail_url,
       priceUsd: 0,
