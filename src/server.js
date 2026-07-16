@@ -32,11 +32,11 @@ const agentCard = {
   name: "ZitoAI",
   description: "Finds licensable media, screens provider-specific usage rules, and produces verifiable License Evidence Packs.",
   version: "0.1.0",
-  url: "https://zitoai.vercel.app",
+  url: config.publicBaseUrl,
   capabilities: { streaming: false, pushNotifications: false },
   services: [
-    { id: "media-search", name: "Rights-aware media search", endpoint: "/api/agent/search", price: "Free during hackathon" },
-    { id: "evidence-pack", name: "License Evidence Pack", endpoint: "/api/evidence-pack", price: "Free during hackathon" },
+    { id: "media-search", name: "Rights-aware media search", endpoint: `${config.publicBaseUrl}/api/agent/search`, price: "Free during hackathon" },
+    { id: "evidence-pack", name: "License Evidence Pack", endpoint: `${config.publicBaseUrl}/api/evidence-pack`, price: "Free during hackathon" },
   ],
   safety: { paymentRequiresUserConfirmation: true, legalAdvice: false },
 };

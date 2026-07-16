@@ -1,12 +1,13 @@
 export const config = {
   port: Number(process.env.PORT || 3000),
+  publicBaseUrl: process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
   openRouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",
     fastModel:
       process.env.OPENROUTER_FAST_MODEL || "openai/gpt-4o-mini",
     smartModel:
       process.env.OPENROUTER_SMART_MODEL || "google/gemini-2.5-flash",
-    siteUrl: process.env.OPENROUTER_SITE_URL || "http://localhost:3000",
+    siteUrl: process.env.OPENROUTER_SITE_URL || process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
     appName: process.env.OPENROUTER_APP_NAME || "ZitoAI",
   },
   supabase: {
@@ -16,7 +17,7 @@ export const config = {
     evidenceBucket: process.env.SUPABASE_EVIDENCE_BUCKET || "license-evidence",
   },
   oauth: {
-    callbackBaseUrl: process.env.OAUTH_CALLBACK_BASE_URL || process.env.OPENROUTER_SITE_URL || "http://localhost:3000",
+    callbackBaseUrl: process.env.OAUTH_CALLBACK_BASE_URL || process.env.PUBLIC_BASE_URL || process.env.OPENROUTER_SITE_URL || "https://www.zitoai.xyz",
     stateSecret: process.env.OAUTH_STATE_SECRET || "",
     tokenEncryptionKey: process.env.OAUTH_TOKEN_ENCRYPTION_KEY || "",
     adobe: {

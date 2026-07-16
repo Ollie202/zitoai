@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import PDFDocument from "pdfkit";
+import { config } from "../config.js";
 
 const logoPath = join(fileURLToPath(new URL("../../public", import.meta.url)), "assets", "zito-logo.png");
 
@@ -9,7 +10,7 @@ export function buildEvidenceManifest(input = {}) {
   const core = {
     schema: "zito.evidence-pack.v1",
     generatedAt: new Date().toISOString(),
-    issuer: { name: "ZitoAI", role: "procurement evidence recorder", website: "https://zitoai.vercel.app" },
+    issuer: { name: "ZitoAI", role: "procurement evidence recorder", website: config.publicBaseUrl },
     brief: clean(input.brief || {}),
     asset: clean(input.asset || {}),
     purchase: clean(input.purchase || {}),

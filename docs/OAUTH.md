@@ -6,11 +6,11 @@ ZitoAI keeps provider access tokens on the server. Tokens are encrypted before t
 
 | Provider | Local callback | Current production callback |
 |---|---|---|
-| Freesound | `http://localhost:3000/auth/freesound/callback` | `https://zitoai.vercel.app/auth/freesound/callback` |
-| Adobe Stock | `http://localhost:3000/auth/adobe_stock/callback` | `https://zitoai.vercel.app/auth/adobe_stock/callback` |
-| Shutterstock | `http://localhost:3000/auth/shutterstock/callback` | `https://zitoai.vercel.app/auth/shutterstock/callback` |
+| Freesound | `http://localhost:3000/auth/freesound/callback` | `https://www.zitoai.xyz/auth/freesound/callback` |
+| Adobe Stock | `http://localhost:3000/auth/adobe_stock/callback` | `https://www.zitoai.xyz/auth/adobe_stock/callback` |
+| Shutterstock | `http://localhost:3000/auth/shutterstock/callback` | `https://www.zitoai.xyz/auth/shutterstock/callback` |
 
-After the custom domain is active, replace `https://zitoai.vercel.app` with the final HTTPS origin in both the provider console and `OAUTH_CALLBACK_BASE_URL`. The two values must match exactly.
+The production origin is `https://www.zitoai.xyz`. Register it exactly in each provider console and keep `OAUTH_CALLBACK_BASE_URL` identical.
 
 ## Required server variables
 

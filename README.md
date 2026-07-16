@@ -27,9 +27,9 @@ Search, rights screening, provider routing, OAuth foundations, authenticated evi
 
 ## Production endpoints
 
-- App: <https://zitoai.vercel.app>
-- Health: <https://zitoai.vercel.app/api/health>
-- Agent card: <https://zitoai.vercel.app/.well-known/agent-card.json>
+- App: <https://www.zitoai.xyz>
+- Health: <https://www.zitoai.xyz/api/health>
+- Agent card: <https://www.zitoai.xyz/.well-known/agent-card.json>
 - Rights-aware agent search: `POST /api/agent/search`
 - Evidence Pack: `POST /api/evidence-pack?format=pdf`
 

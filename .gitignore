@@ -7,3 +7,5 @@ coverage/
 .DS_Store
 
 .vercel
+.agents/
+skills-lock.json
