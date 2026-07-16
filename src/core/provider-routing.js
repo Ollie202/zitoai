@@ -32,6 +32,34 @@ const PROVIDER_PROFILES = {
     free: 2,
     rawAsset: 1,
   },
+  freesound: {
+    supports: ["music", "sound_effect"],
+    signals: ["sound effect", "sfx", "foley", "ambient", "field recording", "sample"],
+    free: 2,
+    commercial: -1,
+    rawAsset: 1,
+  },
+  jamendo: {
+    supports: ["music"],
+    signals: ["music", "song", "instrumental", "background", "creative commons"],
+    free: 2,
+    commercial: -1,
+    rawAsset: 1,
+  },
+  shutterstock: {
+    supports: ["image"],
+    signals: ["stock", "photo", "image", "advert", "campaign"],
+    commercial: 2,
+    paidBudget: 2,
+    rawAsset: 1,
+  },
+  adobe_stock: {
+    supports: ["image", "video"],
+    signals: ["stock", "photo", "image", "video", "commercial"],
+    commercial: 2,
+    paidBudget: 2,
+    rawAsset: 1,
+  },
 };
 
 export function rankProviders(providers, brief) {

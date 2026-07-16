@@ -32,3 +32,22 @@ test("public-domain image request routes Wikimedia first", () => {
   });
   assert.equal(ranked[0].provider.id, "wikimedia");
 });
+
+test("configured Jamendo and Freesound receive provider-specific scores", () => {
+  const ranked = rankProviders(
+    [
+      { id: "jamendo", supportedAssetTypes: ["music"] },
+      { id: "freesound", supportedAssetTypes: ["music", "sound_effect"] },
+    ],
+    {
+      query: "background instrumental music",
+      keywords: ["background", "instrumental", "music"],
+      assetType: "music",
+      commercial: false,
+      rawAssetRequired: true,
+      budgetUsd: null,
+    },
+  );
+  assert.ok(ranked.every((entry) => entry.score > -100));
+  assert.equal(ranked[0].provider.id, "jamendo");
+});
