@@ -172,8 +172,11 @@ function card(asset, index) {
   const price = asset.priceUsd == null ? "Check price" : asset.priceUsd === 0 ? "Free" : `$${asset.priceUsd}`;
   const source = asset.sourceUrl ? `<a href="${escapeAttribute(asset.sourceUrl)}" target="_blank" rel="noreferrer">Original source</a>` : "";
   const license = asset.license?.url ? `<a href="${escapeAttribute(asset.license.url)}" target="_blank" rel="noreferrer">License terms</a>` : "";
+  const checkout = asset.policy.checkoutRequired && (asset.purchaseUrl || asset.sourceUrl)
+    ? `<a class="checkout-link" href="${escapeAttribute(asset.purchaseUrl || asset.sourceUrl)}" target="_blank" rel="noreferrer">Open provider checkout</a>`
+    : "";
   const selectDisabled = asset.policy.verdict === "rejected" ? "disabled" : "";
-  return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${asset.policy.verdict}">${escapeHtml(asset.policy.verdict.replace("_", " "))}</span><p class="policy-summary">${escapeHtml(asset.policy.summary)}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}<button class="select-button" data-select="${index}" ${selectDisabled}>Select and document</button></div></div></article>`;
+  return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${asset.policy.verdict}">${escapeHtml(asset.policy.verdict.replace("_", " "))}</span><p class="policy-summary">${escapeHtml(asset.policy.summary)}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}${checkout}<button class="select-button" data-select="${index}" ${selectDisabled}>Select and document</button></div></div></article>`;
 }
 
 function openEvidence(asset) {
@@ -198,10 +201,11 @@ async function generatePack(format) {
       provider: selectedAsset.provider,
       providerOrderId: $("#evidence-order").value || null,
       providerAssetId: selectedAsset.id,
+      checkoutUrl: selectedAsset.purchaseUrl || selectedAsset.sourceUrl || null,
       receiptNumber: $("#evidence-receipt").value || null,
       amount: $("#evidence-amount").value === "" ? null : Number($("#evidence-amount").value),
       currency: "USD",
-      status: selectedAsset.priceUsd === 0 ? "documented_free_asset" : "user_confirmed",
+      status: $("#evidence-order").value || $("#evidence-receipt").value ? "paid" : "pending",
       purchasedAt: $("#evidence-date").value ? new Date($("#evidence-date").value).toISOString() : new Date().toISOString(),
     },
   };
@@ -221,13 +225,16 @@ async function generatePack(format) {
 async function persistProcurement(payload, blob, format, sha256) {
   const output = $("#pack-status");
   const created = await api("/api/procurements", { method: "POST", body: { requestText: payload.brief.query, requestPayload: payload, normalizedBrief: payload.brief, status: "quoted" } });
-  const purchase = await api(`/api/procurements/${created.procurement.id}/purchase`, { method: "POST", body: { purchase: payload.purchase, license: licensePayload(payload.asset) } });
+  const hasProviderEvidence = payload.purchase.status === "paid" && (payload.purchase.providerOrderId || payload.purchase.receiptNumber);
+  const purchase = hasProviderEvidence
+    ? await api(`/api/procurements/${created.procurement.id}/purchase`, { method: "POST", body: { purchase: payload.purchase, license: licensePayload(payload.asset) } })
+    : null;
   const fileName = `zito-evidence-${payload.asset.provider}-${payload.asset.id}.${format}`;
   const signed = await api(`/api/procurements/${created.procurement.id}/evidence/upload`, { method: "POST", body: { fileName } });
   const uploadResponse = await fetch(signed.upload.signedUrl, { method: "PUT", headers: { "Content-Type": blob.type }, body: blob });
   if (!uploadResponse.ok) throw new Error("Evidence generated, but private upload failed.");
-  await api(`/api/procurements/${created.procurement.id}/evidence`, { method: "POST", body: { purchaseId: purchase.result.purchaseId, licenseId: purchase.result.licenseId, artifactType: format === "pdf" ? "license_certificate" : "delivery_manifest", storagePath: signed.upload.path, originalName: fileName, contentType: blob.type, byteSize: blob.size, sha256 } });
-  output.textContent += " Saved privately to your ZitoAI history.";
+  await api(`/api/procurements/${created.procurement.id}/evidence`, { method: "POST", body: { purchaseId: purchase?.result.purchaseId || null, licenseId: purchase?.result.licenseId || null, artifactType: format === "pdf" ? "license_certificate" : "delivery_manifest", storagePath: signed.upload.path, originalName: fileName, contentType: blob.type, byteSize: blob.size, sha256 } });
+  output.textContent += hasProviderEvidence ? " Saved privately with provider evidence." : " Saved privately as a checkout handoff; no purchase was recorded.";
 }
 
 function licensePayload(asset) {
