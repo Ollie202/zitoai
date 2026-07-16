@@ -80,9 +80,15 @@ export async function normalizeBrief(input) {
   }
 }
 
-function selectModel(input) {
-  const serialized = JSON.stringify(input || {});
-  const text = serialized.toLowerCase();
+export function selectModel(input = {}) {
+  const serialized = JSON.stringify(input);
+  const text = [
+    input.query,
+    input.assetType,
+    input.intendedUse,
+    input.territory,
+    ...(Array.isArray(input.keywords) ? input.keywords : []),
+  ].filter(Boolean).join(" ").toLowerCase();
   const complexSignals = [
     "license",
     "licence",
@@ -93,13 +99,12 @@ function selectModel(input) {
     "client",
     "resale",
     "distribution",
-    "worldwide",
-    "territory",
     "royalty",
     "subscription",
     "editorial",
   ];
-  const hasComplexSignal = complexSignals.some((signal) => text.includes(signal));
+  const nonGlobalTerritory = input.territory && !/^(worldwide|global)$/i.test(String(input.territory).trim());
+  const hasComplexSignal = input.commercial === true || nonGlobalTerritory || complexSignals.some((signal) => text.includes(signal));
   return hasComplexSignal || serialized.length > 1_200
     ? config.openRouter.smartModel
     : config.openRouter.fastModel;
