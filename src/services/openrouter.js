@@ -40,20 +40,21 @@ export function brainStatus() {
 }
 
 export async function normalizeBrief(input) {
-  const local = normalizeBriefLocally(input);
+  const request = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const local = normalizeBriefLocally(request);
   if (!config.openRouter.apiKey) {
     return { brief: local, brain: { used: false, mode: "local" } };
   }
 
-  const selectedModel = selectModel(input);
+  const selectedModel = selectModel(request);
   const fallbackModel = selectedModel === config.openRouter.smartModel
     ? config.openRouter.fastModel
     : config.openRouter.smartModel;
   const attemptedModels = [selectedModel];
 
   try {
-    const body = await requestBrief(input, selectedModel);
-    return buildBrainResult(body, local, input, selectedModel, attemptedModels);
+    const body = await requestBrief(request, selectedModel);
+    return buildBrainResult(body, local, request, selectedModel, attemptedModels);
   } catch (firstError) {
     if (fallbackModel === selectedModel) {
       return {
@@ -64,8 +65,8 @@ export async function normalizeBrief(input) {
 
     attemptedModels.push(fallbackModel);
     try {
-      const body = await requestBrief(input, fallbackModel);
-      return buildBrainResult(body, local, input, fallbackModel, attemptedModels, firstError);
+      const body = await requestBrief(request, fallbackModel);
+      return buildBrainResult(body, local, request, fallbackModel, attemptedModels, firstError);
     } catch (fallbackError) {
       return {
         brief: local,
@@ -81,6 +82,7 @@ export async function normalizeBrief(input) {
 }
 
 export function selectModel(input = {}) {
+  input = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const serialized = JSON.stringify(input);
   const text = [
     input.query,

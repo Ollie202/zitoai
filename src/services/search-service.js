@@ -4,6 +4,7 @@ import { allSearchProviders } from "../providers/index.js";
 import { normalizeBrief } from "./openrouter.js";
 
 export async function searchAssets(input) {
+  input = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const { brief, brain } = await normalizeBrief(input);
   if (!brief.query) throw new Error("A search query is required.");
 

@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
@@ -139,27 +139,27 @@ server.listen(config.port, () => {
 });
 
 function json(response, status, body) {
-  response.writeHead(status, {
+  response.writeHead(status, securityHeaders({
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
-  });
+  }));
   response.end(JSON.stringify(body));
 }
 
 function binary(response, status, body, contentType, fileName, hash) {
-  response.writeHead(status, {
+  response.writeHead(status, securityHeaders({
     "Content-Type": contentType,
     "Content-Disposition": `attachment; filename="${fileName.replace(/[^a-zA-Z0-9._-]/g, "-")}"`,
     "Content-Length": body.length,
     "Cache-Control": "no-store",
     "X-Evidence-SHA256": hash,
     "Access-Control-Expose-Headers": "X-Evidence-SHA256",
-  });
+  }));
   response.end(body);
 }
 
 function redirect(response, location) {
-  response.writeHead(302, { Location: location, "Cache-Control": "no-store" });
+  response.writeHead(302, securityHeaders({ Location: location, "Cache-Control": "no-store" }));
   response.end();
 }
 
@@ -180,18 +180,33 @@ async function readJson(request) {
 }
 
 async function serveStatic(pathname, response) {
-  const requested = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  const safe = normalize(requested).replace(/^(\.\.[/\\])+/, "");
-  const path = join(root, safe);
-  if (!path.startsWith(root)) return json(response, 403, { error: "Forbidden" });
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return json(response, 400, { error: "Invalid path" });
+  }
+  const requested = decoded === "/" ? "index.html" : decoded.replace(/^[/\\]+/, "");
+  const path = resolve(root, requested);
+  const fromRoot = relative(root, path);
+  if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) return json(response, 403, { error: "Forbidden" });
   try {
     const content = await readFile(path);
-    response.writeHead(200, {
+    response.writeHead(200, securityHeaders({
       "Content-Type": mime[extname(path)] || "application/octet-stream",
       "Cache-Control": "no-cache",
-    });
+    }));
     response.end(content);
   } catch {
     json(response, 404, { error: "Not found" });
   }
+}
+
+function securityHeaders(headers) {
+  return {
+    ...headers,
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+  };
 }

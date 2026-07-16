@@ -16,6 +16,7 @@ const COMMERCIAL_WORDS = [
 const BROADCAST_WORDS = ["broadcast", "film", "radio", "television", "tv"];
 
 export function normalizeBriefLocally(input = {}) {
+  input = asObject(input);
   const query = String(input.query || "").trim();
   const lower = `${query} ${input.intendedUse || ""}`.toLowerCase();
   const commercial =
@@ -41,6 +42,10 @@ export function normalizeBriefLocally(input = {}) {
       .filter((word) => word.length > 2)
       .slice(0, 12),
   };
+}
+
+function asObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function inferAssetType(text) {

@@ -7,6 +7,7 @@ import { config } from "../config.js";
 const logoPath = join(fileURLToPath(new URL("../../public", import.meta.url)), "assets", "zito-logo.png");
 
 export function buildEvidenceManifest(input = {}) {
+  input = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const core = {
     schema: "zito.evidence-pack.v1",
     generatedAt: new Date().toISOString(),
