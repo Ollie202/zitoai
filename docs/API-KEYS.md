@@ -8,7 +8,7 @@ Verified against official provider pages on 2026-07-16.
 |---|---|---|---|
 | OpenRouter | [API Keys dashboard](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` | Create a normal inference key, preferably with a $5 spending limit. |
 | MotionElements | [Developer Console](https://www.motionelements.com/developer) | `MOTION_ELEMENTS_API_SECRET` | Create a member account, then create the secret key. API uses Basic Auth with the secret as username and no password. |
-| Shutterstock | [Developer applications](https://www.shutterstock.com/account/developers/apps) | `SHUTTERSTOCK_CLIENT_ID`, `SHUTTERSTOCK_CLIENT_SECRET`, later `SHUTTERSTOCK_ACCESS_TOKEN` | Create an app and select the free API subscription. Free access currently covers the test image collection, not music/video. |
+| Shutterstock | [Developer applications](https://www.shutterstock.com/account/developers/apps) | `SHUTTERSTOCK_CLIENT_ID`, `SHUTTERSTOCK_CLIENT_SECRET`, later `SHUTTERSTOCK_ACCESS_TOKEN` | Create an app, keep `SHUTTERSTOCK_SCOPES=licenses.create licenses.view purchases.view`, and select the free API subscription. Free access currently covers the test image collection, not music/video. |
 | Freesound | [Request API credentials](https://freesound.org/apiv2/apply) | `FREESOUND_API_KEY` | Create a Freesound account first. Use the Client secret/API key for read-only search. |
 | Jamendo | [Developer Portal](https://devportal.jamendo.com/) | `JAMENDO_CLIENT_ID` | Create a developer account and application. Commercial API use requires contacting `licensing@jamendo.com`. |
 | Epidemic Sound | [Developer API page](https://www.epidemicsound.com/business/developers/) | `EPIDEMIC_SOUND_API_KEY` | Request the free prototype/evaluation key. Production access requires a partnership agreement and Developer Portal access. |
@@ -50,3 +50,4 @@ Verified against official provider pages on 2026-07-16.
 3. Never send secrets to browser JavaScript or commit `.env`.
 4. Use separate test and production applications when the provider supports them.
 5. Record callback URLs exactly. Use `http://localhost:3000` while testing unless the provider requires HTTPS.
+6. For Shutterstock image licensing, keep the token scope set to `licenses.create licenses.view purchases.view`.

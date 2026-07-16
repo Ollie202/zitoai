@@ -54,6 +54,7 @@ $("#history-button").addEventListener("click", loadHistory);
 $("#auth-button").addEventListener("click", () => authPanel.classList.remove("hidden"));
 $("#download-pdf").addEventListener("click", () => generatePack("pdf"));
 $("#download-json").addEventListener("click", () => generatePack("json"));
+$("#license-shutterstock").addEventListener("click", licenseSelectedShutterstockImage);
 
 $("#auth-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -189,10 +190,50 @@ function card(asset, index) {
 
 function openEvidence(asset) {
   $("#evidence-asset").innerHTML = `<strong>${escapeHtml(asset.title)}</strong><br><span class="microcopy">${escapeHtml(label(asset.provider))} · ${escapeHtml(asset.license?.name || asset.license?.code || "License requires verification")}</span>`;
+  $("#evidence-order").value = "";
+  $("#evidence-receipt").value = "";
+  $("#evidence-customer").value = "";
   $("#evidence-amount").value = asset.priceUsd ?? "";
   $("#evidence-date").value = new Date().toISOString().slice(0, 16);
   $("#evidence-confirm").checked = false;
+  $("#license-shutterstock").classList.toggle("hidden", asset.provider !== "shutterstock");
   evidencePanel.classList.remove("hidden");
+}
+
+async function licenseSelectedShutterstockImage() {
+  const output = $("#pack-status");
+  if (!selectedAsset || selectedAsset.provider !== "shutterstock") return;
+  if (!$("#evidence-confirm").checked) {
+    output.textContent = "Confirm the evidence statement before creating a real Shutterstock license.";
+    return;
+  }
+  const customerId = $("#evidence-customer").value.trim() || "zito-demo-customer";
+  output.textContent = "Creating Shutterstock image license...";
+  try {
+    const body = await api("/api/providers/shutterstock/license", {
+      method: "POST",
+      body: {
+        imageId: selectedAsset.id,
+        customerId,
+        price: $("#evidence-amount").value === "" ? 0 : Number($("#evidence-amount").value),
+        confirmLicense: true,
+      },
+      auth: false,
+    });
+    const licensed = body.license;
+    selectedAsset.mediaUrl = licensed.downloadUrl;
+    selectedAsset.metadata = { ...(selectedAsset.metadata || {}), shutterstockLicense: licensed };
+    selectedAsset.priceUsd = selectedAsset.priceUsd ?? 0;
+    $("#evidence-order").value = `shutterstock-${licensed.imageId}`;
+    $("#evidence-receipt").value = `allotment-${licensed.allotmentCharge ?? "0"}`;
+    $("#evidence-date").value = new Date(licensed.licensedAt).toISOString().slice(0, 16);
+    $("#evidence-customer").value = licensed.customerId || customerId;
+    output.textContent = licensed.downloadUrl
+      ? "Shutterstock license created. Download URL captured in the evidence pack."
+      : "Shutterstock license created, but no download URL was returned.";
+  } catch (error) {
+    output.textContent = error.message;
+  }
 }
 
 async function generatePack(format) {
@@ -213,6 +254,8 @@ async function generatePack(format) {
       receiptNumber: $("#evidence-receipt").value || null,
       amount: $("#evidence-amount").value === "" ? null : Number($("#evidence-amount").value),
       currency: "USD",
+      customerId: $("#evidence-customer").value || null,
+      providerResponse: selectedAsset.metadata?.shutterstockLicense?.raw || null,
       status: $("#evidence-order").value || $("#evidence-receipt").value ? "paid" : "pending",
       purchasedAt: $("#evidence-date").value ? new Date($("#evidence-date").value).toISOString() : new Date().toISOString(),
     },
@@ -246,7 +289,21 @@ async function persistProcurement(payload, blob, format, sha256) {
 }
 
 function licensePayload(asset) {
-  return { provider: asset.provider, providerLicenseId: asset.license?.code || null, licenseName: asset.license?.name || null, licenseUrl: asset.license?.url || null, termsSnapshot: { license: asset.license, policy: asset.policy }, commercialUse: lastSearch.brief.commercial, attributionRequired: asset.license?.attributionRequired ?? null, territory: lastSearch.brief.territory };
+  return {
+    provider: asset.provider,
+    providerLicenseId: asset.license?.code || null,
+    licenseName: asset.license?.name || null,
+    licenseUrl: asset.license?.url || null,
+    termsSnapshot: {
+      license: asset.license,
+      policy: asset.policy,
+      shutterstockLicense: asset.metadata?.shutterstockLicense || null,
+      customerId: $("#evidence-customer").value || null,
+    },
+    commercialUse: lastSearch.brief.commercial,
+    attributionRequired: asset.license?.attributionRequired ?? null,
+    territory: lastSearch.brief.territory,
+  };
 }
 
 async function api(path, options = {}) {

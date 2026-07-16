@@ -9,6 +9,12 @@ import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
 import { completeOAuth, oauthStatus, startOAuth } from "./services/oauth.js";
 import {
+  licenseShutterstockImage,
+  listShutterstockImageCategories,
+  listShutterstockSubscriptions,
+  shutterstockStatus,
+} from "./services/shutterstock.js";
+import {
   createEvidenceUpload,
   createProcurement,
   getProcurement,
@@ -67,6 +73,18 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/api/providers") {
       return json(response, 200, { providers: publicProviderInfo() });
+    }
+    if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/status") {
+      return json(response, 200, shutterstockStatus());
+    }
+    if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/categories") {
+      return json(response, 200, await listShutterstockImageCategories());
+    }
+    if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/subscriptions") {
+      return json(response, 200, await listShutterstockSubscriptions());
+    }
+    if (request.method === "POST" && url.pathname === "/api/providers/shutterstock/license") {
+      return json(response, 201, { license: await licenseShutterstockImage(await readJson(request)) });
     }
     if (request.method === "GET" && ["/api/agent", "/.well-known/agent.json", "/.well-known/agent-card.json"].includes(url.pathname)) {
       return json(response, 200, agentCard);

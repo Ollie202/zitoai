@@ -94,10 +94,12 @@
         <div class="evidence-grid">
           <label>Provider order ID<input id="evidence-order" placeholder="Optional for a free asset" /></label>
           <label>Receipt / invoice number<input id="evidence-receipt" placeholder="Optional" /></label>
+          <label>Customer / licensee ID<input id="evidence-customer" placeholder="Client, email, or project ID" /></label>
           <label>Paid amount (USD)<input id="evidence-amount" type="number" min="0" step="0.01" /></label>
           <label>Purchase date<input id="evidence-date" type="datetime-local" /></label>
         </div>
         <label class="confirm-row"><input id="evidence-confirm" type="checkbox" /> I confirm that no payment or license purchase is being fabricated. The pack will record the evidence I provide.</label>
+        <button id="license-shutterstock" class="secondary-button hidden" type="button">License Shutterstock image</button>
         <div class="pack-actions">
           <button id="download-pdf" class="primary-button" type="button">Generate PDF</button>
           <button id="download-json" class="secondary-button" type="button">Download JSON</button>

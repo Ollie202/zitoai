@@ -32,9 +32,9 @@ export const config = {
     shutterstock: {
       clientId: process.env.SHUTTERSTOCK_CLIENT_ID || "",
       clientSecret: process.env.SHUTTERSTOCK_CLIENT_SECRET || "",
-      authorizeUrl: process.env.SHUTTERSTOCK_AUTHORIZE_URL || "",
-      tokenUrl: process.env.SHUTTERSTOCK_TOKEN_URL || "",
-      scopes: process.env.SHUTTERSTOCK_SCOPES || "",
+      authorizeUrl: process.env.SHUTTERSTOCK_AUTHORIZE_URL || "https://api.shutterstock.com/v2/oauth/authorize",
+      tokenUrl: process.env.SHUTTERSTOCK_TOKEN_URL || "https://api.shutterstock.com/v2/oauth/access_token",
+      scopes: process.env.SHUTTERSTOCK_SCOPES || "licenses.create licenses.view purchases.view",
     },
   },
   providers: {

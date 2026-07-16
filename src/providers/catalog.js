@@ -24,13 +24,13 @@ export const providerCatalog = [
   {
     id: "shutterstock",
     name: "Shutterstock",
-    status: "free_test_images_only",
+    status: "image_license_ready",
     requiresApiKey: true,
     credentialType: "OAuth application + API subscription",
     supportedAssetTypes: ["image", "video", "music"],
     officialUrl: "https://www.shutterstock.com/api/pricing",
     capabilities: ["search", "platform_license", "license"],
-    policy: "Free account is image-only; Platform License does not permit standalone raw-file delivery.",
+    policy: "Use for image licensing with the proper scopes and subscription. Search works with the configured access token; licensing requires licenses.create, licenses.view and purchases.view.",
   },
   {
     id: "freesound",

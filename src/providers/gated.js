@@ -31,21 +31,36 @@ export const adobeStockProvider = {
 };
 
 export const shutterstockProvider = {
-  id: "shutterstock", name: "Shutterstock", status: "free_test_images_only",
+  id: "shutterstock", name: "Shutterstock", status: "image_license_ready",
   requiresApiKey: true, supportedAssetTypes: ["image"],
   isConfigured: () => Boolean(config.credentials.shutterstock.accessToken),
   async search(brief, limit) {
     if (!this.isConfigured()) throw new Error("Shutterstock access token is not configured");
     const url = new URL("https://api.shutterstock.com/v2/images/search");
-    url.searchParams.set("query", brief.query); url.searchParams.set("per_page", String(limit));
+    url.searchParams.set("query", brief.query);
+    url.searchParams.set("per_page", String(limit));
+    url.searchParams.set("view", "full");
+    url.searchParams.set("safe", "true");
     const body = await fetchJson(url, { headers: { Authorization: `Bearer ${config.credentials.shutterstock.accessToken}` } });
     return (body.data || []).map((item) => ({
       id: String(item.id), provider: "shutterstock", title: item.description || `Shutterstock image ${item.id}`,
       creator: item.contributor?.display_name || "Shutterstock contributor", assetType: "image",
-      previewUrl: item.assets?.preview?.url || item.assets?.small_thumb?.url || null, mediaUrl: null,
-      sourceUrl: `https://www.shutterstock.com/image-photo/${item.id}`, priceUsd: null,
+      previewUrl: item.assets?.preview_1500?.url || item.assets?.preview?.url || item.assets?.small_thumb?.url || null,
+      mediaUrl: null,
+      sourceUrl: `https://www.shutterstock.com/image-photo/${item.id}`,
+      purchaseUrl: `https://www.shutterstock.com/image-photo/${item.id}`,
+      priceUsd: null,
       license: { code: "shutterstock-platform", name: "Shutterstock Platform License", url: "https://www.shutterstock.com/api/pricing", attributionRequired: false },
-      metadata: { aspect: item.aspect, editorial: item.is_editorial, rawDownload: false },
+      metadata: {
+        aspect: item.aspect,
+        categories: item.categories || [],
+        keywords: item.keywords || [],
+        editorial: item.is_editorial,
+        height: item.height,
+        width: item.width,
+        rawDownload: false,
+        shutterstockLicenseEndpoint: "/api/providers/shutterstock/license",
+      },
     }));
   },
 };

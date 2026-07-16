@@ -13,10 +13,10 @@ The first authenticated adapters are intentionally search-only until credentials
 ## Shutterstock
 
 - Env: `SHUTTERSTOCK_ACCESS_TOKEN`
-- Search: free-test image search endpoint
-- Purchase: subscription/API entitlement
+- Search: image search endpoint with `view=full` so categories and keywords are captured
+- Purchase: `POST /v2/images/licenses` with `licenses.create`, `licenses.view`, and `purchases.view` scopes
 - Delivery: keep assets inside the integrated project unless the customer owns a separate Standard/Enhanced license
-- Policy: do not treat a free test account as video/music production access
+- Policy: use Shutterstock for image licenses only in this build; do not treat a free test account as video/music production access
 
 ## Freesound
 
