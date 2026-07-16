@@ -6,6 +6,15 @@ import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { brainStatus, normalizeBrief } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
+import {
+  createEvidenceUpload,
+  createProcurement,
+  getProcurement,
+  listProcurements,
+  recordPurchase,
+  registerEvidence,
+  storageStatus,
+} from "./services/supabase.js";
 
 const root = fileURLToPath(new URL("../public", import.meta.url));
 const mime = {
@@ -26,6 +35,7 @@ const server = createServer(async (request, response) => {
         service: "license-hunter",
         version: "0.1.0",
         brain: brainStatus(),
+        storage: storageStatus(),
       });
     }
     if (request.method === "GET" && url.pathname === "/api/providers") {
@@ -36,6 +46,28 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "POST" && url.pathname === "/api/search") {
       return json(response, 200, await searchAssets(await readJson(request)));
+    }
+    if (request.method === "GET" && url.pathname === "/api/procurements") {
+      return json(response, 200, { procurements: await listProcurements(request) });
+    }
+    if (request.method === "POST" && url.pathname === "/api/procurements") {
+      return json(response, 201, { procurement: await createProcurement(request, await readJson(request)) });
+    }
+    const procurementMatch = url.pathname.match(/^\/api\/procurements\/([0-9a-f-]+)$/i);
+    if (request.method === "GET" && procurementMatch) {
+      return json(response, 200, { procurement: await getProcurement(request, procurementMatch[1]) });
+    }
+    const purchaseMatch = url.pathname.match(/^\/api\/procurements\/([0-9a-f-]+)\/purchase$/i);
+    if (request.method === "POST" && purchaseMatch) {
+      return json(response, 201, { result: await recordPurchase(request, purchaseMatch[1], await readJson(request)) });
+    }
+    const uploadMatch = url.pathname.match(/^\/api\/procurements\/([0-9a-f-]+)\/evidence\/upload$/i);
+    if (request.method === "POST" && uploadMatch) {
+      return json(response, 201, { upload: await createEvidenceUpload(request, uploadMatch[1], await readJson(request)) });
+    }
+    const evidenceMatch = url.pathname.match(/^\/api\/procurements\/([0-9a-f-]+)\/evidence$/i);
+    if (request.method === "POST" && evidenceMatch) {
+      return json(response, 201, { evidence: await registerEvidence(request, evidenceMatch[1], await readJson(request)) });
     }
     if (request.method === "GET") return serveStatic(url.pathname, response);
 

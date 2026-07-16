@@ -9,6 +9,12 @@ export const config = {
     siteUrl: process.env.OPENROUTER_SITE_URL || "http://localhost:3000",
     appName: process.env.OPENROUTER_APP_NAME || "ZitoAI",
   },
+  supabase: {
+    url: process.env.SUPABASE_URL || "",
+    anonKey: process.env.SUPABASE_ANON_KEY || "",
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+    evidenceBucket: process.env.SUPABASE_EVIDENCE_BUCKET || "license-evidence",
+  },
   providers: {
     openverse: process.env.OPENVERSE_BASE_URL || "https://api.openverse.org/v1",
     wikimedia:
