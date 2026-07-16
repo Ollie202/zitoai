@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>License Hunter</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand">LH</div>
+        <div>
+          <p class="eyebrow">OKX.AI procurement agent</p>
+          <h1>License Hunter</h1>
+          <p class="lede">Find usable media, reject incompatible rights, and preserve the evidence.</p>
+        </div>
+        <span id="brain" class="brain">Checking brain…</span>
+      </header>
+
+      <section class="panel search-panel">
+        <form id="search-form">
+          <label class="wide">
+            What do you need?
+            <textarea id="query" required placeholder="Upbeat Afrobeats-style instrumental for a 30-second commercial Instagram ad"></textarea>
+          </label>
+          <label>
+            Asset
+            <select id="asset-type">
+              <option value="music">Music</option>
+              <option value="sound_effect">Sound effect</option>
+              <option value="image">Image</option>
+              <option value="video">Video footage</option>
+            </select>
+          </label>
+          <label>
+            Intended use
+            <select id="intended-use">
+              <option value="commercial_content">Commercial content</option>
+              <option value="personal_content">Personal content</option>
+              <option value="broadcast_content">Broadcast / film</option>
+              <option value="digital_product">App, game or software</option>
+            </select>
+          </label>
+          <label>
+            Maximum license budget (USD)
+            <input id="budget" type="number" min="0" step="1" placeholder="No maximum" />
+          </label>
+          <button type="submit">Hunt licenses</button>
+        </form>
+      </section>
+
+      <section id="status" class="status hidden"></section>
+      <section id="summary" class="summary hidden"></section>
+      <section id="results" class="results"></section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
