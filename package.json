@@ -1,9 +1,9 @@
 {
-  "name": "license-hunter",
+  "name": "zitoai",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "License-aware asset procurement agent for OKX.AI",
+  "description": "ZitoAI rights-aware media procurement and evidence agent for OKX.AI",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
@@ -13,6 +13,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.6"
+    "@supabase/supabase-js": "^2.110.6",
+    "pdfkit": "^0.19.1"
   }
 }

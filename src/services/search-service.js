@@ -68,7 +68,7 @@ export async function searchAssets(input) {
     results: rank(results),
     generatedAt: new Date().toISOString(),
     disclaimer:
-      "License Hunter provides procurement evidence and policy screening, not legal advice or a replacement for the provider's license.",
+      "ZitoAI provides procurement evidence and policy screening, not legal advice or a replacement for the provider's license.",
   };
 }
 

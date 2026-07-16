@@ -104,7 +104,7 @@ function evaluateOpenLicense(asset, brief, sourceVerificationRequired) {
 function evaluateFreeToUse(asset, brief) {
   const warnings = [
     "The provider license is non-transferable.",
-    "License Hunter must not send the raw song to a customer after downloading it under its own identity.",
+    "ZitoAI must not send the raw song to a customer after downloading it under its own identity.",
   ];
 
   if (brief.commercial || brief.broadcast) {

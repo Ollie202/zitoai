@@ -6,6 +6,8 @@ import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { brainStatus, normalizeBrief } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
+import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
+import { completeOAuth, oauthStatus, startOAuth } from "./services/oauth.js";
 import {
   createEvidenceUpload,
   createProcurement,
@@ -23,6 +25,20 @@ const mime = {
   ".js": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+};
+
+const agentCard = {
+  name: "ZitoAI",
+  description: "Finds licensable media, screens provider-specific usage rules, and produces verifiable License Evidence Packs.",
+  version: "0.1.0",
+  url: "https://zitoai.vercel.app",
+  capabilities: { streaming: false, pushNotifications: false },
+  services: [
+    { id: "media-search", name: "Rights-aware media search", endpoint: "/api/agent/search", price: "Free during hackathon" },
+    { id: "evidence-pack", name: "License Evidence Pack", endpoint: "/api/evidence-pack", price: "Free during hackathon" },
+  ],
+  safety: { paymentRequiresUserConfirmation: true, legalAdvice: false },
 };
 
 const server = createServer(async (request, response) => {
@@ -32,20 +48,59 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/health") {
       return json(response, 200, {
         ok: true,
-        service: "license-hunter",
+        service: "zitoai",
         version: "0.1.0",
         brain: brainStatus(),
         storage: storageStatus(),
+        oauth: oauthStatus(),
+      });
+    }
+    if (request.method === "GET" && url.pathname === "/api/config") {
+      return json(response, 200, {
+        supabase: {
+          configured: storageStatus().configured,
+          url: config.supabase.url || null,
+          anonKey: config.supabase.anonKey || null,
+        },
+        oauth: { callbackBaseUrl: config.oauth?.callbackBaseUrl || config.openRouter.siteUrl },
       });
     }
     if (request.method === "GET" && url.pathname === "/api/providers") {
       return json(response, 200, { providers: publicProviderInfo() });
+    }
+    if (request.method === "GET" && ["/api/agent", "/.well-known/agent.json", "/.well-known/agent-card.json"].includes(url.pathname)) {
+      return json(response, 200, agentCard);
     }
     if (request.method === "POST" && url.pathname === "/api/brief") {
       return json(response, 200, await normalizeBrief(await readJson(request)));
     }
     if (request.method === "POST" && url.pathname === "/api/search") {
       return json(response, 200, await searchAssets(await readJson(request)));
+    }
+    if (request.method === "POST" && url.pathname === "/api/agent/search") {
+      return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", paymentRequired: false });
+    }
+    if (request.method === "POST" && url.pathname === "/api/evidence-pack") {
+      const manifest = buildEvidenceManifest(await readJson(request));
+      if (url.searchParams.get("format") === "pdf") {
+        const pdf = await buildEvidencePdf(manifest);
+        return binary(response, 200, pdf, "application/pdf", `zito-evidence-${manifest.asset.provider || "asset"}-${manifest.asset.id || "record"}.pdf`, evidenceHash(pdf));
+      }
+      const body = Buffer.from(JSON.stringify(manifest, null, 2));
+      return binary(response, 200, body, "application/json; charset=utf-8", `zito-evidence-${manifest.asset.provider || "asset"}-${manifest.asset.id || "record"}.json`, manifest.manifestSha256);
+    }
+    const oauthStartMatch = url.pathname.match(/^\/api\/oauth\/([a-z0-9_-]+)\/start$/i);
+    if (request.method === "POST" && oauthStartMatch) {
+      return json(response, 200, await startOAuth(request, oauthStartMatch[1]));
+    }
+    const oauthCallbackMatch = url.pathname.match(/^\/auth\/([a-z0-9_-]+)\/callback$/i);
+    if (request.method === "GET" && oauthCallbackMatch) {
+      try {
+        const result = await completeOAuth(oauthCallbackMatch[1], Object.fromEntries(url.searchParams));
+        return redirect(response, `/oauth-callback.html?provider=${encodeURIComponent(result.provider)}`);
+      } catch (error) {
+        return redirect(response, `/oauth-callback.html?error=${encodeURIComponent(error.message)}`);
+      }
     }
     if (request.method === "GET" && url.pathname === "/api/procurements") {
       return json(response, 200, { procurements: await listProcurements(request) });
@@ -79,7 +134,7 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(config.port, () => {
-  console.log(`License Hunter running at http://localhost:${config.port}`);
+  console.log(`ZitoAI running at http://localhost:${config.port}`);
   console.log(`OpenRouter: ${brainStatus().configured ? "configured" : "local fallback"}`);
 });
 
@@ -89,6 +144,23 @@ function json(response, status, body) {
     "Cache-Control": "no-store",
   });
   response.end(JSON.stringify(body));
+}
+
+function binary(response, status, body, contentType, fileName, hash) {
+  response.writeHead(status, {
+    "Content-Type": contentType,
+    "Content-Disposition": `attachment; filename="${fileName.replace(/[^a-zA-Z0-9._-]/g, "-")}"`,
+    "Content-Length": body.length,
+    "Cache-Control": "no-store",
+    "X-Evidence-SHA256": hash,
+    "Access-Control-Expose-Headers": "X-Evidence-SHA256",
+  });
+  response.end(body);
+}
+
+function redirect(response, location) {
+  response.writeHead(302, { Location: location, "Cache-Control": "no-store" });
+  response.end();
 }
 
 async function readJson(request) {

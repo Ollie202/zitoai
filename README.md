@@ -1,6 +1,6 @@
-# License Hunter
+# ZitoAI
 
-An OKX.AI-ready, license-aware asset procurement agent.
+An OKX.AI-ready, rights-aware media procurement and evidence agent.
 
 ## Start
 
@@ -23,4 +23,14 @@ No API keys are required for the five live public connectors: Wikimedia Commons,
 
 ## Current boundary
 
-Search, rights screening and provider routing are live. Paid purchase execution is deliberately separated until the customer/licensee model is confirmed per provider. The next implementation phase is authenticated provider adapters, customer checkout/OAuth, OKX Agent Payments Protocol payment confirmation, and the License Evidence Pack.
+Search, rights screening, provider routing, OAuth foundations, authenticated evidence storage, and PDF/JSON License Evidence Packs are implemented. Paid purchase execution remains deliberately separated until the customer/licensee model is confirmed per provider; ZitoAI never represents a payment or license as completed without provider evidence and explicit user confirmation.
+
+## Production endpoints
+
+- App: <https://zitoai.vercel.app>
+- Health: <https://zitoai.vercel.app/api/health>
+- Agent card: <https://zitoai.vercel.app/.well-known/agent-card.json>
+- Rights-aware agent search: `POST /api/agent/search`
+- Evidence Pack: `POST /api/evidence-pack?format=pdf`
+
+See [OAuth setup](docs/OAUTH.md) and [Supabase setup](supabase/README.md) before enabling private history or account-connected providers.

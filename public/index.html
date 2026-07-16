@@ -3,57 +3,136 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>License Hunter</title>
+    <meta name="description" content="ZitoAI finds licensable media, checks usage restrictions, guides checkout and preserves proof of every license." />
+    <meta property="og:title" content="ZitoAI — Find it. License it. Prove it." />
+    <meta property="og:description" content="A rights-aware media procurement agent built for verifiable licensing." />
+    <meta property="og:image" content="/assets/zito-logo.png" />
+    <title>ZitoAI — Rights-aware media procurement</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/assets/zito-logo.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
-      <header>
-        <div class="brand">LH</div>
-        <div>
-          <p class="eyebrow">OKX.AI procurement agent</p>
-          <h1>License Hunter</h1>
-          <p class="lede">Find usable media, reject incompatible rights, and preserve the evidence.</p>
-        </div>
-        <span id="brain" class="brain">Checking brain…</span>
-      </header>
+    <nav class="nav shell">
+      <a class="wordmark" href="/" aria-label="ZitoAI home">
+        <img src="/assets/zito-logo.png" alt="ZitoAI" />
+        <span>Zito<span>AI</span></span>
+      </a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#providers">Providers</a>
+        <a href="/about.html">About</a>
+      </div>
+      <div class="nav-actions"><button id="history-button" class="ghost-button hidden" type="button">History</button><button id="auth-button" class="ghost-button" type="button">Sign in</button></div>
+    </nav>
 
-      <section class="panel search-panel">
-        <form id="search-form">
-          <label class="wide">
-            What do you need?
-            <textarea id="query" required placeholder="Upbeat Afrobeats-style instrumental for a 30-second commercial Instagram ad"></textarea>
+    <main>
+      <section class="hero shell">
+        <div class="hero-copy">
+          <p class="eyebrow">OKX.AI rights procurement agent</p>
+          <h1>Find it. License it. <em>Prove it.</em></h1>
+          <p class="lede">Zito turns a plain-language media request into a provider search, rights check, purchase trail and downloadable License Evidence Pack.</p>
+          <div class="trust-row">
+            <span id="brain" class="status-pill">Checking AI…</span>
+            <span id="storage" class="status-pill">Checking storage…</span>
+            <span class="status-pill">Human approval before payment</span>
+          </div>
+        </div>
+        <img class="hero-logo" src="/assets/zito-logo.png" alt="ZitoAI logo" />
+      </section>
+
+      <section class="workspace shell">
+        <div class="section-heading">
+          <div><p class="eyebrow">Start a procurement</p><h2>Describe the asset and how you will use it.</h2></div>
+          <span class="step-chip">01 · Intent</span>
+        </div>
+        <form id="search-form" class="search-form">
+          <label class="wide">What do you need?
+            <textarea id="query" required placeholder="Upbeat Afrobeats instrumental for a 30-second paid Instagram campaign in Nigeria and the UK"></textarea>
           </label>
-          <label>
-            Asset
-            <select id="asset-type">
-              <option value="music">Music</option>
-              <option value="sound_effect">Sound effect</option>
-              <option value="image">Image</option>
-              <option value="video">Video footage</option>
-            </select>
+          <label>Asset type
+            <select id="asset-type"><option value="music">Music</option><option value="sound_effect">Sound effect</option><option value="image">Image</option><option value="video">Video footage</option></select>
           </label>
-          <label>
-            Intended use
-            <select id="intended-use">
-              <option value="commercial_content">Commercial content</option>
-              <option value="personal_content">Personal content</option>
-              <option value="broadcast_content">Broadcast / film</option>
-              <option value="digital_product">App, game or software</option>
-            </select>
+          <label>Intended use
+            <select id="intended-use"><option value="commercial_content">Commercial content</option><option value="personal_content">Personal content</option><option value="broadcast_content">Broadcast / film</option><option value="digital_product">App, game or software</option></select>
           </label>
-          <label>
-            Maximum license budget (USD)
-            <input id="budget" type="number" min="0" step="1" placeholder="No maximum" />
-          </label>
-          <button type="submit">Hunt licenses</button>
+          <label>Territory<input id="territory" value="worldwide" /></label>
+          <label>Maximum budget (USD)<input id="budget" type="number" min="0" step="1" placeholder="No maximum" /></label>
+          <button class="primary-button" type="submit"><span>Search and screen rights</span><span aria-hidden="true">→</span></button>
         </form>
       </section>
 
-      <section id="status" class="status hidden"></section>
-      <section id="summary" class="summary hidden"></section>
-      <section id="results" class="results"></section>
+      <section id="status" class="notice hidden shell"></section>
+      <section id="summary" class="summary hidden shell"></section>
+      <section id="results" class="results shell"></section>
+
+      <section id="how" class="how shell">
+        <div class="section-heading"><div><p class="eyebrow">Evidence-first procurement</p><h2>One request, four controlled stages.</h2></div><span class="step-chip">02–04</span></div>
+        <div class="steps">
+          <article><strong>01</strong><h3>Understand</h3><p>Extract asset type, use, territory, budget and commercial risk from the user’s words.</p></article>
+          <article><strong>02</strong><h3>Route</h3><p>Search the providers most likely to satisfy that specific brief and account configuration.</p></article>
+          <article><strong>03</strong><h3>Clear</h3><p>Reject incompatible terms and surface attribution, checkout and additional-clearance requirements.</p></article>
+          <article><strong>04</strong><h3>Prove</h3><p>Preserve the asset, transaction, license terms, hashes and evidence files in one exportable pack.</p></article>
+        </div>
+      </section>
+
+      <section id="providers" class="providers-section shell">
+        <p class="eyebrow">Provider-aware by design</p>
+        <h2>Every source keeps its own rules.</h2>
+        <div id="provider-list" class="provider-list"><span>Loading providers…</span></div>
+        <div id="connection-list" class="connection-list"></div>
+      </section>
     </main>
+
+    <aside id="evidence-panel" class="evidence-panel hidden" aria-labelledby="evidence-title">
+      <div class="evidence-card">
+        <button id="evidence-close" class="close-button" aria-label="Close">×</button>
+        <p class="eyebrow">License Evidence Pack</p>
+        <h2 id="evidence-title">Confirm the transaction evidence.</h2>
+        <div id="evidence-asset" class="selected-asset"></div>
+        <div class="evidence-grid">
+          <label>Provider order ID<input id="evidence-order" placeholder="Optional for a free asset" /></label>
+          <label>Receipt / invoice number<input id="evidence-receipt" placeholder="Optional" /></label>
+          <label>Paid amount (USD)<input id="evidence-amount" type="number" min="0" step="0.01" /></label>
+          <label>Purchase date<input id="evidence-date" type="datetime-local" /></label>
+        </div>
+        <label class="confirm-row"><input id="evidence-confirm" type="checkbox" /> I confirm that no payment or license purchase is being fabricated. The pack will record the evidence I provide.</label>
+        <div class="pack-actions">
+          <button id="download-pdf" class="primary-button" type="button">Generate PDF</button>
+          <button id="download-json" class="secondary-button" type="button">Download JSON</button>
+        </div>
+        <p id="pack-status" class="microcopy">Sign in to save the procurement and evidence privately. Downloads also work without an account.</p>
+      </div>
+    </aside>
+
+    <aside id="auth-panel" class="evidence-panel hidden" aria-labelledby="auth-title">
+      <div class="auth-card">
+        <button id="auth-close" class="close-button" aria-label="Close">×</button>
+        <img src="/assets/zito-logo.png" alt="" />
+        <p class="eyebrow">Secure workspace</p>
+        <h2 id="auth-title">Sign in to preserve your evidence.</h2>
+        <p>We will email you a secure magic link. No password is required.</p>
+        <form id="auth-form"><label>Email address<input id="auth-email" type="email" required placeholder="you@example.com" /></label><button class="primary-button" type="submit">Send magic link</button></form>
+        <button id="sign-out" class="secondary-button hidden" type="button">Sign out</button>
+        <p id="auth-status" class="microcopy"></p>
+      </div>
+    </aside>
+
+    <aside id="history-panel" class="evidence-panel hidden" aria-labelledby="history-title">
+      <div class="evidence-card">
+        <button id="history-close" class="close-button" aria-label="Close">×</button>
+        <p class="eyebrow">Private evidence vault</p>
+        <h2 id="history-title">Procurement history</h2>
+        <div id="history-list" class="history-list"><p class="microcopy">Loading…</p></div>
+      </div>
+    </aside>
+
+    <footer class="footer shell">
+      <a class="wordmark" href="/"><img src="/assets/zito-logo.png" alt="" /><span>Zito<span>AI</span></span></a>
+      <p>Rights-aware procurement and evidence—not legal advice.</p>
+      <div><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/data-deletion.html">Data deletion</a><a href="/contact.html">Contact</a></div>
+    </footer>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

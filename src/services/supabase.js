@@ -13,6 +13,30 @@ export function storageStatus() {
   };
 }
 
+export async function authenticatedUser(request) {
+  const { user } = await authenticatedClient(request);
+  return user;
+}
+
+export async function saveProviderConnection(userId, provider, connection) {
+  if (!adminConfigured) throw new Error("Supabase service role is not configured.");
+  const { error } = await adminClient()
+    .from("provider_connections")
+    .upsert({
+      owner_id: userId,
+      provider,
+      provider_account_id: connection.providerAccountId || null,
+      account_label: connection.accountLabel || null,
+      scopes: connection.scopes || [],
+      status: "connected",
+      access_token_ciphertext: connection.accessTokenCiphertext,
+      refresh_token_ciphertext: connection.refreshTokenCiphertext || null,
+      expires_at: connection.expiresAt || null,
+      metadata: connection.metadata || {},
+    }, { onConflict: "owner_id,provider" });
+  if (error) throw new Error(error.message);
+}
+
 export async function createProcurement(request, payload) {
   const { client, user } = await authenticatedClient(request);
   const { data, error } = await client

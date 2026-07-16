@@ -17,7 +17,7 @@ export const adobeStockProvider = {
     url.searchParams.set("search_parameters[limit]", String(limit));
     url.searchParams.set("search_parameters[filters][content_type:photo]", brief.assetType === "image" ? "1" : "0");
     const body = await fetchJson(url, {
-      headers: { "x-api-key": config.credentials.adobe.apiKey, "x-product": "LicenseHunter/0.1" },
+      headers: { "x-api-key": config.credentials.adobe.apiKey, "x-product": "ZitoAI/0.1" },
     });
     return (body.files || []).map((item) => ({
       id: String(item.id), provider: "adobe_stock", title: item.title || "Adobe Stock asset",

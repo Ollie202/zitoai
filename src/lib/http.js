@@ -13,7 +13,7 @@ export async function fetchJson(url, options = {}) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "LicenseHunter/0.1 (OKX.AI hackathon prototype)",
+        "User-Agent": "ZitoAI/0.1 (OKX.AI hackathon prototype)",
         ...(options.headers || {}),
       },
     });

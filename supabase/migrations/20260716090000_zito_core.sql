@@ -106,6 +106,8 @@ create table public.provider_connections (
   scopes text[] not null default '{}',
   status text not null default 'pending' check (status in ('pending','connected','expired','revoked','error')),
   credentials_ref text,
+  access_token_ciphertext text,
+  refresh_token_ciphertext text,
   expires_at timestamptz,
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
@@ -156,8 +158,8 @@ create policy "licenses_owner_all" on public.license_records for all
 using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 create policy "evidence_owner_all" on public.evidence_artifacts for all
 using (owner_id = auth.uid()) with check (owner_id = auth.uid());
-create policy "connections_owner_all" on public.provider_connections for all
-using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "connections_owner_read" on public.provider_connections for select
+using (owner_id = auth.uid());
 create policy "audit_owner_read" on public.audit_events for select
 using (owner_id = auth.uid());
 create policy "audit_owner_insert" on public.audit_events for insert

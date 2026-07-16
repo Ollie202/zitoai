@@ -15,6 +15,27 @@ export const config = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
     evidenceBucket: process.env.SUPABASE_EVIDENCE_BUCKET || "license-evidence",
   },
+  oauth: {
+    callbackBaseUrl: process.env.OAUTH_CALLBACK_BASE_URL || process.env.OPENROUTER_SITE_URL || "http://localhost:3000",
+    stateSecret: process.env.OAUTH_STATE_SECRET || "",
+    tokenEncryptionKey: process.env.OAUTH_TOKEN_ENCRYPTION_KEY || "",
+    adobe: {
+      clientId: process.env.ADOBE_STOCK_CLIENT_ID || "",
+      clientSecret: process.env.ADOBE_STOCK_CLIENT_SECRET || "",
+      scopes: process.env.ADOBE_STOCK_SCOPES || "openid,creative_sdk,offline_access",
+    },
+    freesound: {
+      clientId: process.env.FREESOUND_CLIENT_ID || "",
+      clientSecret: process.env.FREESOUND_CLIENT_SECRET || "",
+    },
+    shutterstock: {
+      clientId: process.env.SHUTTERSTOCK_CLIENT_ID || "",
+      clientSecret: process.env.SHUTTERSTOCK_CLIENT_SECRET || "",
+      authorizeUrl: process.env.SHUTTERSTOCK_AUTHORIZE_URL || "",
+      tokenUrl: process.env.SHUTTERSTOCK_TOKEN_URL || "",
+      scopes: process.env.SHUTTERSTOCK_SCOPES || "",
+    },
+  },
   providers: {
     openverse: process.env.OPENVERSE_BASE_URL || "https://api.openverse.org/v1",
     wikimedia:
