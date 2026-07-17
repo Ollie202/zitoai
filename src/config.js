@@ -1,3 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+loadEnvFile(resolve(process.cwd(), "local.env"));
+loadEnvFile(resolve(process.cwd(), ".env"));
+
 export const config = {
   port: Number(process.env.PORT || 3000),
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
@@ -38,3 +44,21 @@ export const config = {
     jamendo: { clientId: process.env.JAMENDO_CLIENT_ID || "" },
   },
 };
+
+function loadEnvFile(path) {
+  if (!existsSync(path)) return;
+  const lines = readFileSync(path, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+    const key = match[1];
+    if (process.env[key] != null && process.env[key] !== "") continue;
+    let value = match[2];
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}

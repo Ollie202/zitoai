@@ -18,7 +18,7 @@ ZitoAI now works with three live licensing APIs:
 ## Run it
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item .env.example local.env
 npm start
 ```
 
