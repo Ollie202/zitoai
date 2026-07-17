@@ -20,3 +20,35 @@ test("Evidence Pack is a non-empty PDF with a response digest", async () => {
   assert.ok(pdf.length > 5_000);
   assert.match(evidenceHash(pdf), /^[a-f0-9]{64}$/);
 });
+
+test("Jamendo evidence manifest records external checkout and certificate workflow", () => {
+  const manifest = buildEvidenceManifest({
+    brief: { query: "upbeat advert music", assetType: "music", intendedUse: "commercial_content", commercial: true, territory: "worldwide" },
+    asset: {
+      id: "123",
+      provider: "jamendo",
+      title: "Bright Campaign Track",
+      creator: "Jam Artist",
+      sourceUrl: "https://www.jamendo.com/track/123",
+      purchaseUrl: "https://licensing.jamendo.com/track/123",
+      assetType: "music",
+      license: { code: "jamendo-license", name: "Jamendo commercial licensing available", url: "https://licensing.jamendo.com/track/123", attributionRequired: true },
+      policy: { verdict: "review", summary: "Jamendo commercial clearance is a handoff.", checkoutRequired: true, rawDeliveryAllowed: false },
+      metadata: {
+        jamendoLicense: {
+          mode: "checkout_handoff_certificate_required",
+          checkoutUrl: "https://licensing.jamendo.com/track/123",
+          requiredExternalSteps: ["Complete Jamendo Licensing checkout.", "Generate Jamendo License Certificate."],
+          projectDetailsExpected: ["project title", "licensee/client", "invoice", "license certificate"],
+        },
+      },
+    },
+    purchase: { provider: "jamendo", status: "checkout_handoff", receiptNumber: "license-certificate-pending" },
+  });
+
+  assert.equal(manifest.providerWorkflow.provider, "jamendo");
+  assert.equal(manifest.providerWorkflow.mode, "checkout_handoff_certificate_required");
+  assert.equal(manifest.providerWorkflow.checkoutUrl, "https://licensing.jamendo.com/track/123");
+  assert.match(manifest.providerWorkflow.requiredProof, /License Certificate/);
+  assert.match(manifest.providerWorkflow.summary, /public API returned catalog\/licensing metadata only/);
+});

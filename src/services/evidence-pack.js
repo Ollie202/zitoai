@@ -17,6 +17,7 @@ export function buildEvidenceManifest(input = {}) {
     purchase: clean(input.purchase || {}),
     controllingLicense: clean(input.asset?.license || {}),
     policyScreen: clean(input.asset?.policy || {}),
+    providerWorkflow: clean(providerWorkflow(input.asset || {}, input.purchase || {})),
     evidenceStatement: "This pack records supplied source, license and transaction evidence. It does not create, transfer or expand rights.",
   };
   const manifestSha256 = sha256(canonical(core));
@@ -59,6 +60,18 @@ export async function buildEvidencePdf(manifest) {
     ["Status", manifest.purchase.status],
     ["Purchased", manifest.purchase.purchasedAt],
   ]);
+  if (manifest.providerWorkflow?.summary) {
+    section(doc, "Provider workflow", [
+      ["Summary", manifest.providerWorkflow.summary],
+      ["Checkout URL", manifest.providerWorkflow.checkoutUrl],
+      ["Required proof", manifest.providerWorkflow.requiredProof],
+    ]);
+    if (manifest.providerWorkflow.steps?.length) {
+      heading(doc, "Provider steps");
+      for (const step of manifest.providerWorkflow.steps) doc.fillColor("#505b6d").font("Helvetica").fontSize(9).text(`• ${step}`, { indent: 8, paragraphGap: 4 });
+      doc.moveDown(.6);
+    }
+  }
   section(doc, "Controlling license", [
     ["License", manifest.controllingLicense.name || manifest.controllingLicense.code],
     ["License URL", manifest.controllingLicense.url],
@@ -113,6 +126,27 @@ function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
   return JSON.stringify(value);
+}
+
+function providerWorkflow(asset, purchase) {
+  if (asset.provider !== "jamendo") return null;
+  const jamendoLicense = asset.metadata?.jamendoLicense || {};
+  return {
+    provider: "jamendo",
+    mode: jamendoLicense.mode || "checkout_handoff_certificate_required",
+    summary: purchase.status === "external_purchase_recorded"
+      ? "Jamendo purchase evidence was recorded from an external Jamendo checkout."
+      : "Jamendo public API returned catalog/licensing metadata only. Commercial licensing must be completed through Jamendo checkout or a separate Jamendo agreement.",
+    checkoutUrl: jamendoLicense.checkoutUrl || asset.purchaseUrl || asset.sourceUrl || null,
+    requiredProof: "Jamendo invoice number, License Certificate, purchase date, and project/licensee details.",
+    steps: jamendoLicense.requiredExternalSteps || [
+      "Complete Jamendo Licensing checkout for the selected track.",
+      "Add the project details after purchase inside Jamendo.",
+      "Generate and keep the Jamendo License Certificate.",
+      "Record the invoice/certificate reference in ZitoAI.",
+    ],
+    expectedProjectDetails: jamendoLicense.projectDetailsExpected || [],
+  };
 }
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }

@@ -9,6 +9,7 @@ const brain = $("#brain");
 const storage = $("#storage");
 const evidencePanel = $("#evidence-panel");
 const authPanel = $("#auth-panel");
+const connectionList = $("#connection-list");
 let lastSearch = null;
 let selectedAsset = null;
 let authConfigured = false;
@@ -55,6 +56,18 @@ $("#auth-button").addEventListener("click", () => authPanel.classList.remove("hi
 $("#download-pdf").addEventListener("click", () => generatePack("pdf"));
 $("#download-json").addEventListener("click", () => generatePack("json"));
 $("#license-shutterstock").addEventListener("click", licenseSelectedShutterstockImage);
+$("#license-jamendo").addEventListener("click", captureJamendoLicenseTerms);
+$("#download-freesound-original").addEventListener("click", downloadFreesoundOriginal);
+connectionList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-connect]");
+  if (!button) return;
+  try {
+    const result = await api(`/api/oauth/${button.dataset.connect}/start`, { method: "POST" });
+    location.href = result.authorizeUrl;
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
 
 $("#auth-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -73,7 +86,7 @@ async function loadHealth() {
     const body = await api("/api/health", { auth: false });
     brain.textContent = body.brain.configured ? `AI ready · ${shortModel(body.brain.fastModel)} + ${shortModel(body.brain.smartModel)}` : "AI fallback · local parser";
     storage.textContent = body.storage.configured ? "Private evidence storage ready" : "Evidence downloads ready · cloud storage pending";
-    renderConnections(body.oauth || {});
+    await refreshOAuthConnections(body.oauth || {});
   } catch {
     brain.textContent = "Service offline";
     storage.textContent = "Storage unavailable";
@@ -110,6 +123,7 @@ function updateAuth(session) {
     signOutButton.classList.remove("hidden");
     $("#history-button").classList.remove("hidden");
     $("#auth-status").textContent = "Signed in. Evidence can be saved privately.";
+    refreshOAuthConnections().catch(() => {});
   } else {
     button.textContent = authConfigured ? "Sign in" : "Storage pending";
     form.classList.toggle("hidden", !authConfigured);
@@ -119,25 +133,29 @@ function updateAuth(session) {
   }
 }
 
-function renderConnections(oauth) {
+async function refreshOAuthConnections(oauth = null) {
+  const body = oauth || (await api("/api/health", { auth: false })).oauth || {};
+  let connections = [];
+  try {
+    const result = await api("/api/oauth/connections");
+    connections = result.connections || [];
+  } catch {
+    connections = [];
+  }
+  renderConnections(body, connections);
+}
+
+function renderConnections(oauth, connections = []) {
   const entries = [
     ["freesound", "Freesound", "Connect a user account for authenticated audio actions."],
     ["shutterstock", "Shutterstock", "Enabled only when current provider OAuth endpoints are supplied."],
   ];
   $("#connection-list").innerHTML = entries.map(([id, name, copy]) => {
     const item = oauth[id] || {};
-    return `<article class="connection-card"><h3>${name}</h3><p class="microcopy">${copy}</p><button class="secondary-button" data-connect="${id}" ${item.configured ? "" : "disabled"}>${item.configured ? "Connect account" : "Credentials pending"}</button></article>`;
+    const connected = connections.find((connection) => connection.provider === id);
+    const labelText = connected ? `Connected as ${connected.account_label || connected.provider_account_id || "account"}` : item.configured ? "Connect account" : "Credentials pending";
+    return `<article class="connection-card"><h3>${name}</h3><p class="microcopy">${copy}</p><button class="secondary-button" data-connect="${id}" ${item.configured && !connected ? "" : "disabled"}>${escapeHtml(labelText)}</button></article>`;
   }).join("");
-  $("#connection-list").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-connect]");
-    if (!button) return;
-    try {
-      const result = await api(`/api/oauth/${button.dataset.connect}/start`, { method: "POST" });
-      location.href = result.authorizeUrl;
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  });
 }
 
 async function loadHistory() {
@@ -180,11 +198,15 @@ function card(asset, index) {
   const price = asset.priceUsd == null ? "Check price" : asset.priceUsd === 0 ? "Free" : `$${asset.priceUsd}`;
   const source = asset.sourceUrl ? `<a href="${escapeAttribute(asset.sourceUrl)}" target="_blank" rel="noreferrer">Original source</a>` : "";
   const license = asset.license?.url ? `<a href="${escapeAttribute(asset.license.url)}" target="_blank" rel="noreferrer">License terms</a>` : "";
-  const checkout = asset.policy.checkoutRequired && (asset.purchaseUrl || asset.sourceUrl)
+  const checkout = shouldShowCheckout(asset)
     ? `<a class="checkout-link" href="${escapeAttribute(asset.purchaseUrl || asset.sourceUrl)}" target="_blank" rel="noreferrer">Open provider checkout</a>`
     : "";
   const selectDisabled = asset.policy.verdict === "rejected" ? "disabled" : "";
   return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${asset.policy.verdict}">${escapeHtml(asset.policy.verdict.replace("_", " "))}</span><p class="policy-summary">${escapeHtml(asset.policy.summary)}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}${checkout}<button class="select-button" data-select="${index}" ${selectDisabled}>Select and document</button></div></div></article>`;
+}
+
+function shouldShowCheckout(asset) {
+  return Boolean((asset.policy.checkoutRequired || asset.provider === "jamendo") && (asset.purchaseUrl || asset.sourceUrl));
 }
 
 function openEvidence(asset) {
@@ -196,7 +218,21 @@ function openEvidence(asset) {
   $("#evidence-date").value = new Date().toISOString().slice(0, 16);
   $("#evidence-confirm").checked = false;
   $("#license-shutterstock").classList.toggle("hidden", asset.provider !== "shutterstock");
+  $("#license-jamendo").classList.toggle("hidden", asset.provider !== "jamendo");
+  $("#download-freesound-original").classList.toggle("hidden", asset.provider !== "freesound");
+  renderJamendoHandoff(asset);
   evidencePanel.classList.remove("hidden");
+}
+
+function renderJamendoHandoff(asset) {
+  const panel = $("#jamendo-handoff");
+  const link = $("#jamendo-checkout-link");
+  const isJamendo = asset.provider === "jamendo";
+  panel.classList.toggle("hidden", !isJamendo);
+  if (!isJamendo) return;
+  const checkoutUrl = asset.metadata?.proLicenseUrl || asset.purchaseUrl || asset.sourceUrl || asset.license?.url;
+  link.href = checkoutUrl || "#";
+  link.classList.toggle("hidden", !checkoutUrl);
 }
 
 async function licenseSelectedShutterstockImage() {
@@ -235,6 +271,68 @@ async function licenseSelectedShutterstockImage() {
   }
 }
 
+function captureJamendoLicenseTerms() {
+  const output = $("#pack-status");
+  if (!selectedAsset || selectedAsset.provider !== "jamendo") return;
+  if (!$("#evidence-confirm").checked) {
+    output.textContent = "Confirm the evidence statement before capturing Jamendo terms.";
+    return;
+  }
+  const jamendoLicense = {
+    trackId: selectedAsset.id,
+    sourceUrl: selectedAsset.sourceUrl || null,
+    checkoutUrl: selectedAsset.purchaseUrl || selectedAsset.metadata?.proLicenseUrl || selectedAsset.sourceUrl || null,
+    licenseUrl: selectedAsset.license?.url || null,
+    licenseName: selectedAsset.license?.name || null,
+    commercialLicenseUrl: selectedAsset.metadata?.proLicenseUrl || null,
+    licenses: selectedAsset.metadata?.licenses || null,
+    audiodownloadAllowed: selectedAsset.metadata?.audiodownloadAllowed ?? null,
+    rawDownloadUrl: selectedAsset.metadata?.rawDownloadUrl || null,
+    tags: selectedAsset.metadata?.tags || [],
+    requiredExternalSteps: [
+      "Complete Jamendo Licensing checkout for the selected track.",
+      "Add the project details after purchase inside Jamendo.",
+      "Generate and keep the Jamendo License Certificate.",
+      "Record the invoice/certificate reference in ZitoAI before treating the project as licensed.",
+    ],
+    projectDetailsExpected: ["project title", "project type", "licensee/client", "usage/channel", "purchase invoice", "license certificate"],
+    mode: "checkout_handoff_certificate_required",
+    capturedAt: new Date().toISOString(),
+  };
+  selectedAsset.metadata = { ...(selectedAsset.metadata || {}), jamendoLicense };
+  if (!$("#evidence-order").value) $("#evidence-order").value = `jamendo-track-${selectedAsset.id}`;
+  if (!$("#evidence-receipt").value) $("#evidence-receipt").value = "license-certificate-pending";
+  output.textContent = selectedAsset.metadata?.proLicenseUrl
+    ? "Jamendo handoff captured. Open Jamendo, buy the track, add project details, generate the certificate, then replace the pending receipt with the invoice/certificate reference."
+    : "Jamendo terms captured. Review the track license, then add real invoice/certificate evidence if you complete checkout externally.";
+}
+
+async function downloadFreesoundOriginal() {
+  const output = $("#pack-status");
+  if (!selectedAsset || selectedAsset.provider !== "freesound") return;
+  if (!$("#evidence-confirm").checked) {
+    output.textContent = "Confirm the evidence statement before downloading the original Freesound file.";
+    return;
+  }
+  output.textContent = "Requesting Freesound original download through OAuth2…";
+  try {
+    const body = await api(`/api/providers/freesound/sounds/${selectedAsset.id}/download`, {
+      method: "POST",
+      body: {},
+    });
+    const downloadUrl = body.download?.downloadUrl || null;
+    if (!downloadUrl) throw new Error("Freesound did not return a downloadable URL.");
+    selectedAsset.metadata = { ...(selectedAsset.metadata || {}), freesoundOriginalDownload: body.download };
+    selectedAsset.mediaUrl = downloadUrl;
+    $("#evidence-order").value = `freesound-${selectedAsset.id}`;
+    $("#evidence-receipt").value = "oauth2-original-download";
+    output.textContent = "Freesound original download URL captured. Opening the file in a new tab…";
+    window.open(downloadUrl, "_blank", "noreferrer");
+  } catch (error) {
+    output.textContent = error.message;
+  }
+}
+
 async function generatePack(format) {
   if (!selectedAsset || !lastSearch) return;
   const output = $("#pack-status");
@@ -254,8 +352,8 @@ async function generatePack(format) {
       amount: $("#evidence-amount").value === "" ? null : Number($("#evidence-amount").value),
       currency: "USD",
       customerId: $("#evidence-customer").value || null,
-      providerResponse: selectedAsset.metadata?.shutterstockLicense?.raw || null,
-      status: $("#evidence-order").value || $("#evidence-receipt").value ? "paid" : "pending",
+      providerResponse: selectedAsset.metadata?.shutterstockLicense?.raw || selectedAsset.metadata?.jamendoLicense || null,
+      status: purchaseStatus(selectedAsset),
       purchasedAt: $("#evidence-date").value ? new Date($("#evidence-date").value).toISOString() : new Date().toISOString(),
     },
   };
@@ -272,10 +370,22 @@ async function generatePack(format) {
   }
 }
 
+function purchaseStatus(asset) {
+  if (asset.provider === "shutterstock" && asset.metadata?.shutterstockLicense) return "paid";
+  if (asset.provider === "freesound" && asset.metadata?.freesoundOriginalDownload) return "free_downloaded";
+  if (asset.provider === "jamendo" && asset.metadata?.jamendoLicense) {
+    const receipt = $("#evidence-receipt").value.trim();
+    const amount = $("#evidence-amount").value;
+    const hasRealExternalEvidence = receipt && receipt !== "license-certificate-pending" && amount !== "";
+    return hasRealExternalEvidence ? "external_purchase_recorded" : "checkout_handoff";
+  }
+  return $("#evidence-order").value || $("#evidence-receipt").value ? "paid" : "pending";
+}
+
 async function persistProcurement(payload, blob, format, sha256) {
   const output = $("#pack-status");
   const created = await api("/api/procurements", { method: "POST", body: { requestText: payload.brief.query, requestPayload: payload, normalizedBrief: payload.brief, status: "quoted" } });
-  const hasProviderEvidence = payload.purchase.status === "paid" && (payload.purchase.providerOrderId || payload.purchase.receiptNumber);
+  const hasProviderEvidence = ["paid", "free_downloaded", "external_purchase_recorded"].includes(payload.purchase.status) && (payload.purchase.providerOrderId || payload.purchase.receiptNumber);
   const purchase = hasProviderEvidence
     ? await api(`/api/procurements/${created.procurement.id}/purchase`, { method: "POST", body: { purchase: payload.purchase, license: licensePayload(payload.asset) } })
     : null;
@@ -297,6 +407,7 @@ function licensePayload(asset) {
       license: asset.license,
       policy: asset.policy,
       shutterstockLicense: asset.metadata?.shutterstockLicense || null,
+      jamendoLicense: asset.metadata?.jamendoLicense || null,
       customerId: $("#evidence-customer").value || null,
     },
     commercialUse: lastSearch.brief.commercial,

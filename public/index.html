@@ -91,6 +91,16 @@
         <p class="eyebrow">License Evidence Pack</p>
         <h2 id="evidence-title">Confirm the transaction evidence.</h2>
         <div id="evidence-asset" class="selected-asset"></div>
+        <div id="jamendo-handoff" class="provider-handoff hidden">
+          <h3>Jamendo checkout handoff</h3>
+          <ol>
+            <li>Open the Jamendo licensing page for this track.</li>
+            <li>Choose the right license for the project and complete checkout on Jamendo.</li>
+            <li>After payment, add the project details inside Jamendo and generate the License Certificate.</li>
+            <li>Paste the invoice/certificate reference below before generating the Zito evidence pack.</li>
+          </ol>
+          <a id="jamendo-checkout-link" class="secondary-button" href="#" target="_blank" rel="noreferrer">Open Jamendo licensing</a>
+        </div>
         <div class="evidence-grid">
           <label>Provider order ID<input id="evidence-order" placeholder="Optional for a free asset" /></label>
           <label>Receipt / invoice number<input id="evidence-receipt" placeholder="Optional" /></label>
@@ -100,6 +110,8 @@
         </div>
         <label class="confirm-row"><input id="evidence-confirm" type="checkbox" /> I confirm that no payment or license purchase is being fabricated. The pack will record the evidence I provide.</label>
         <button id="license-shutterstock" class="secondary-button hidden" type="button">License Shutterstock image</button>
+        <button id="license-jamendo" class="secondary-button hidden" type="button">Capture Jamendo license terms</button>
+        <button id="download-freesound-original" class="secondary-button hidden" type="button">Download Freesound original</button>
         <div class="pack-actions">
           <button id="download-pdf" class="primary-button" type="button">Generate PDF</button>
           <button id="download-json" class="secondary-button" type="button">Download JSON</button>

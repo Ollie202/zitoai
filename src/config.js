@@ -7,6 +7,7 @@ loadEnvFile(resolve(process.cwd(), ".env"));
 export const config = {
   port: Number(process.env.PORT || 3000),
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
+  aspBaseUrl: process.env.ASP_BASE_URL || process.env.PUBLIC_BASE_URL || "https://asp.zitoai.xyz",
   openRouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",
     fastModel:
@@ -23,7 +24,7 @@ export const config = {
     evidenceBucket: process.env.SUPABASE_EVIDENCE_BUCKET || "license-evidence",
   },
   oauth: {
-    callbackBaseUrl: process.env.OAUTH_CALLBACK_BASE_URL || process.env.PUBLIC_BASE_URL || process.env.OPENROUTER_SITE_URL || "https://www.zitoai.xyz",
+    callbackBaseUrl: process.env.OAUTH_CALLBACK_BASE_URL || process.env.ASP_BASE_URL || process.env.PUBLIC_BASE_URL || process.env.OPENROUTER_SITE_URL || "https://asp.zitoai.xyz",
     stateSecret: process.env.OAUTH_STATE_SECRET || "",
     tokenEncryptionKey: process.env.OAUTH_TOKEN_ENCRYPTION_KEY || "",
     freesound: {
@@ -39,7 +40,10 @@ export const config = {
     },
   },
   credentials: {
-    shutterstock: { accessToken: process.env.SHUTTERSTOCK_ACCESS_TOKEN || "" },
+    shutterstock: {
+      accessToken: process.env.SHUTTERSTOCK_ACCESS_TOKEN || "",
+      apiBase: process.env.SHUTTERSTOCK_API_BASE || "https://api.shutterstock.com/v2",
+    },
     freesound: { apiKey: process.env.FREESOUND_API_KEY || "" },
     jamendo: { clientId: process.env.JAMENDO_CLIENT_ID || "" },
   },

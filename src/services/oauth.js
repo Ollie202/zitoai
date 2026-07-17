@@ -1,4 +1,4 @@
-import { createCipheriv, createHmac, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import { config } from "../config.js";
 import { authenticatedUser, saveProviderConnection } from "./supabase.js";
 import { fetchJson } from "../lib/http.js";
@@ -62,12 +62,18 @@ export async function completeOAuth(providerId, params) {
     timeoutMs: 20_000,
   });
   const expiresAt = token.expires_in ? new Date(Date.now() + Number(token.expires_in) * 1000).toISOString() : null;
+  const connectedAccount = providerId === "freesound" ? await fetchFreesoundAccount(token.access_token) : null;
   await saveProviderConnection(state.userId, providerId, {
     scopes: String(token.scope || provider.scope() || "").split(/[ ,]+/).filter(Boolean),
     accessTokenCiphertext: encrypt(token.access_token),
     refreshTokenCiphertext: token.refresh_token ? encrypt(token.refresh_token) : null,
     expiresAt,
-    metadata: { tokenType: token.token_type || "Bearer" },
+    providerAccountId: connectedAccount?.unique_id || connectedAccount?.username || null,
+    accountLabel: connectedAccount?.username || connectedAccount?.unique_id || null,
+    metadata: {
+      tokenType: token.token_type || "Bearer",
+      ...(connectedAccount ? { account: connectedAccount } : {}),
+    },
   });
   return { provider: providerId, expiresAt };
 }
@@ -111,4 +117,25 @@ function encrypt(valueToEncrypt) {
   const cipher = createCipheriv("aes-256-gcm", key, iv);
   const ciphertext = Buffer.concat([cipher.update(String(valueToEncrypt), "utf8"), cipher.final()]);
   return `v1:${iv.toString("base64url")}:${cipher.getAuthTag().toString("base64url")}:${ciphertext.toString("base64url")}`;
+}
+
+function decrypt(valueToDecrypt) {
+  const [version, ivValue, authTagValue, ciphertextValue] = String(valueToDecrypt || "").split(":");
+  if (version !== "v1" || !ivValue || !authTagValue || !ciphertextValue) throw new Error("Invalid encrypted token format.");
+  const key = createHmac("sha256", config.oauth.tokenEncryptionKey).update("zito-oauth-token-v1").digest();
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(ivValue, "base64url"));
+  decipher.setAuthTag(Buffer.from(authTagValue, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(ciphertextValue, "base64url")), decipher.final()]).toString("utf8");
+}
+
+async function fetchFreesoundAccount(accessToken) {
+  const account = await fetchJson("https://freesound.org/apiv2/me/", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeoutMs: 20_000,
+  });
+  return account;
+}
+
+export async function decryptToken(valueToDecrypt) {
+  return decrypt(valueToDecrypt);
 }

@@ -37,6 +37,17 @@ export async function saveProviderConnection(userId, provider, connection) {
   if (error) throw new Error(error.message);
 }
 
+export async function listProviderConnections(request) {
+  const { user } = await authenticatedClient(request);
+  return queryProviderConnections(user.id);
+}
+
+export async function getProviderConnection(request, provider) {
+  const { user } = await authenticatedClient(request);
+  const connections = await queryProviderConnections(user.id, provider);
+  return connections[0] || null;
+}
+
 export async function createProcurement(request, payload) {
   const { client, user } = await authenticatedClient(request);
   const { data, error } = await client
@@ -160,4 +171,17 @@ function adminClient() {
   return createClient(config.supabase.url, config.supabase.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+async function queryProviderConnections(ownerId, provider = null) {
+  if (!adminConfigured) throw new Error("Supabase service role is not configured.");
+  let query = adminClient()
+    .from("provider_connections")
+    .select("provider, provider_account_id, account_label, scopes, status, expires_at, metadata, updated_at")
+    .eq("owner_id", ownerId)
+    .order("provider", { ascending: true });
+  if (provider) query = query.eq("provider", provider);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data || [];
 }

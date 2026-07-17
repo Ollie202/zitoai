@@ -4,14 +4,20 @@ import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
+import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
 import { brainStatus, normalizeBrief } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
 import { completeOAuth, oauthStatus, startOAuth } from "./services/oauth.js";
+import { downloadFreesoundOriginal, freesoundStatus, getFreesoundMe } from "./services/freesound.js";
+import { jamendoStatus } from "./services/jamendo.js";
 import {
+  getShutterstockImageDetails,
   licenseShutterstockImage,
+  listShutterstockImageLicenses,
   listShutterstockImageCategories,
   listShutterstockSubscriptions,
+  redownloadShutterstockImage,
   shutterstockStatus,
 } from "./services/shutterstock.js";
 import {
@@ -19,6 +25,7 @@ import {
   createProcurement,
   getProcurement,
   listProcurements,
+  listProviderConnections,
   recordPurchase,
   registerEvidence,
   storageStatus,
@@ -38,11 +45,14 @@ const agentCard = {
   name: "ZitoAI",
   description: "Finds licensable media, screens provider-specific usage rules, and produces verifiable License Evidence Packs.",
   version: "0.1.0",
-  url: config.publicBaseUrl,
-  capabilities: { streaming: false, pushNotifications: false },
+  url: config.aspBaseUrl,
+  websiteUrl: config.publicBaseUrl,
+  role: "ASP",
+  protocol: "A2MCP",
+  capabilities: { streaming: false, pushNotifications: false, a2mcp: true },
   services: [
-    { id: "media-search", name: "Rights-aware media search", endpoint: `${config.publicBaseUrl}/api/agent/search`, price: "Free during hackathon" },
-    { id: "evidence-pack", name: "License Evidence Pack", endpoint: `${config.publicBaseUrl}/api/evidence-pack`, price: "Free during hackathon" },
+    { id: "rights-media-search", name: "Rights-aware media search", endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`, price: "Free during hackathon", paymentRequired: false },
+    { id: "license-evidence-manifest", name: "License Evidence Manifest", endpoint: `${config.aspBaseUrl}/api/a2mcp/evidence-manifest`, price: "Free during hackathon", paymentRequired: false },
   ],
   safety: { paymentRequiresUserConfirmation: true, legalAdvice: false },
 };
@@ -77,17 +87,47 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/status") {
       return json(response, 200, shutterstockStatus());
     }
+    if (request.method === "GET" && url.pathname === "/api/providers/freesound/status") {
+      return json(response, 200, freesoundStatus());
+    }
+    if (request.method === "GET" && url.pathname === "/api/providers/jamendo/status") {
+      return json(response, 200, jamendoStatus());
+    }
     if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/categories") {
       return json(response, 200, await listShutterstockImageCategories());
     }
     if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/subscriptions") {
       return json(response, 200, await listShutterstockSubscriptions());
     }
+    const shutterstockImageMatch = url.pathname.match(/^\/api\/providers\/shutterstock\/images\/([^/]+)$/i);
+    if (request.method === "GET" && shutterstockImageMatch) {
+      return json(response, 200, await getShutterstockImageDetails(shutterstockImageMatch[1]));
+    }
+    if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/licenses") {
+      return json(response, 200, await listShutterstockImageLicenses(Object.fromEntries(url.searchParams)));
+    }
     if (request.method === "POST" && url.pathname === "/api/providers/shutterstock/license") {
       return json(response, 201, { license: await licenseShutterstockImage(await readJson(request)) });
     }
+    const freesoundDownloadMatch = url.pathname.match(/^\/api\/providers\/freesound\/sounds\/([0-9]+)\/download$/i);
+    if (request.method === "POST" && freesoundDownloadMatch) {
+      return json(response, 201, { download: await downloadFreesoundOriginal(request, freesoundDownloadMatch[1]) });
+    }
+    if (request.method === "GET" && url.pathname === "/api/providers/freesound/me") {
+      return json(response, 200, await getFreesoundMe(request));
+    }
+    const shutterstockRedownloadMatch = url.pathname.match(/^\/api\/providers\/shutterstock\/licenses\/([^/]+)\/download$/i);
+    if (request.method === "POST" && shutterstockRedownloadMatch) {
+      return json(response, 201, { download: await redownloadShutterstockImage({ ...(await readJson(request)), licenseId: shutterstockRedownloadMatch[1] }) });
+    }
     if (request.method === "GET" && ["/api/agent", "/.well-known/agent.json", "/.well-known/agent-card.json"].includes(url.pathname)) {
       return json(response, 200, agentCard);
+    }
+    if (request.method === "GET" && ["/api/a2mcp", "/api/a2mcp/manifest", "/.well-known/a2mcp.json"].includes(url.pathname)) {
+      return json(response, 200, buildA2McpManifest());
+    }
+    if (request.method === "GET" && url.pathname === "/api/oauth/connections") {
+      return json(response, 200, { connections: await listProviderConnections(request) });
     }
     if (request.method === "POST" && url.pathname === "/api/brief") {
       return json(response, 200, await normalizeBrief(await readJson(request)));
@@ -96,7 +136,13 @@ const server = createServer(async (request, response) => {
       return json(response, 200, await searchAssets(await readJson(request)));
     }
     if (request.method === "POST" && url.pathname === "/api/agent/search") {
-      return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", paymentRequired: false });
+      return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", role: "ASP", protocol: "A2MCP", paymentRequired: false });
+    }
+    if (request.method === "POST" && url.pathname === "/api/a2mcp/media-search") {
+      return json(response, 200, wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request))));
+    }
+    if (request.method === "POST" && url.pathname === "/api/a2mcp/evidence-manifest") {
+      return json(response, 200, wrapA2McpResult("license-evidence-manifest", buildEvidenceManifest(await readJson(request))));
     }
     if (request.method === "POST" && url.pathname === "/api/evidence-pack") {
       const manifest = buildEvidenceManifest(await readJson(request));
