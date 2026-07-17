@@ -3,51 +3,43 @@ import assert from "node:assert/strict";
 import { rankProviders } from "../src/core/provider-routing.js";
 
 const providers = [
-  { id: "stockfilm", supportedAssetTypes: ["video"] },
-  { id: "wikimedia", supportedAssetTypes: ["music", "image", "video"] },
-  { id: "openverse", supportedAssetTypes: ["music", "image"] },
-  { id: "free_to_use", supportedAssetTypes: ["music"] },
+  { id: "shutterstock", supportedAssetTypes: ["image"] },
+  { id: "freesound", supportedAssetTypes: ["sound_effect"] },
+  { id: "jamendo", supportedAssetTypes: ["music"] },
 ];
 
-test("archival video routes Stockfilm first", () => {
+test("image requests route Shutterstock first", () => {
   const ranked = rankProviders(providers, {
-    query: "vintage archival 8mm footage",
-    keywords: ["vintage", "archival", "8mm"],
-    assetType: "video",
+    query: "commercial product hero image",
+    keywords: ["commercial", "product", "image"],
+    assetType: "image",
     commercial: true,
     rawAssetRequired: true,
     budgetUsd: 20,
   });
-  assert.equal(ranked[0].provider.id, "stockfilm");
+  assert.equal(ranked[0].provider.id, "shutterstock");
 });
 
-test("public-domain image request routes Wikimedia first", () => {
+test("sound effect requests route Freesound first", () => {
   const ranked = rankProviders(providers, {
-    query: "public domain historical image",
-    keywords: ["public", "domain", "historical", "image"],
-    assetType: "image",
+    query: "ambient sound effect",
+    keywords: ["ambient", "sound", "effect"],
+    assetType: "sound_effect",
     commercial: true,
     rawAssetRequired: true,
     budgetUsd: null,
   });
-  assert.equal(ranked[0].provider.id, "wikimedia");
+  assert.equal(ranked[0].provider.id, "freesound");
 });
 
-test("configured Jamendo and Freesound receive provider-specific scores", () => {
-  const ranked = rankProviders(
-    [
-      { id: "jamendo", supportedAssetTypes: ["music"] },
-      { id: "freesound", supportedAssetTypes: ["music", "sound_effect"] },
-    ],
-    {
-      query: "background instrumental music",
-      keywords: ["background", "instrumental", "music"],
-      assetType: "music",
-      commercial: false,
-      rawAssetRequired: true,
-      budgetUsd: null,
-    },
-  );
-  assert.ok(ranked.every((entry) => entry.score > -100));
+test("music requests route Jamendo first", () => {
+  const ranked = rankProviders(providers, {
+    query: "background instrumental music track",
+    keywords: ["background", "instrumental", "music"],
+    assetType: "music",
+    commercial: false,
+    rawAssetRequired: true,
+    budgetUsd: null,
+  });
   assert.equal(ranked[0].provider.id, "jamendo");
 });

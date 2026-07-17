@@ -9,32 +9,21 @@ const commercialBrief = {
   territory: "worldwide",
 };
 
-test("Free To Use is checkout-only for commercial use", () => {
-  const result = evaluateAsset({ provider: "free_to_use", license: { code: "free-license" } }, commercialBrief);
-  assert.equal(result.verdict, "checkout_only");
-  assert.equal(result.rawDeliveryAllowed, false);
+test("Shutterstock stays review-only until checkout evidence exists", () => {
+  const result = evaluateAsset({ provider: "shutterstock", license: { code: "shutterstock-platform" } }, commercialBrief);
+  assert.equal(result.verdict, "review");
+  assert.equal(result.checkoutRequired, true);
 });
 
-test("Openverse non-commercial license is rejected for a commercial request", () => {
-  const result = evaluateAsset(
-    { provider: "openverse", license: { code: "by-nc-nd", attributionRequired: true } },
-    commercialBrief,
-  );
-  assert.equal(result.verdict, "rejected");
-});
-
-test("Wikimedia CC BY is allowed with attribution", () => {
-  const result = evaluateAsset(
-    { provider: "wikimedia", license: { code: "cc-by-4.0", attributionRequired: true } },
-    commercialBrief,
-  );
-  assert.equal(result.verdict, "allowed");
+test("Freesound stays review-only for commercial use", () => {
+  const result = evaluateAsset({ provider: "freesound", license: { code: "cc0" } }, commercialBrief);
+  assert.equal(result.verdict, "review");
   assert.equal(result.rawDeliveryAllowed, true);
 });
 
-test("Stockfilm rights uncertainty remains visible", () => {
+test("Jamendo stays review-only for music licensing", () => {
   const result = evaluateAsset(
-    { provider: "stockfilm", rights: { eligible: true, confidence: "0.6" } },
+    { provider: "jamendo", license: { code: "jamendo-license", attributionRequired: true } },
     commercialBrief,
   );
   assert.equal(result.verdict, "review");

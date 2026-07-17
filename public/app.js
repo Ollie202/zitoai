@@ -122,7 +122,6 @@ function updateAuth(session) {
 function renderConnections(oauth) {
   const entries = [
     ["freesound", "Freesound", "Connect a user account for authenticated audio actions."],
-    ["adobe_stock", "Adobe Stock", "Connect the customer account before any licensed checkout."],
     ["shutterstock", "Shutterstock", "Enabled only when current provider OAuth endpoints are supplied."],
   ];
   $("#connection-list").innerHTML = entries.map(([id, name, copy]) => {
@@ -319,6 +318,6 @@ function setStatus(message, isError = false) { status.classList.remove("hidden",
 function downloadBlob(blob, name) { const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 function shortModel(value) { return String(value || "").split("/").pop(); }
 function providerStatus(provider) { return provider.configured === false ? "credentials needed" : provider.status === "live_public_connector" ? "live" : String(provider.status || "catalogued").replaceAll("_", " "); }
-function label(value) { return ({ wikimedia: "Wikimedia Commons", openverse: "Openverse", free_to_use: "Free To Use", stockfilm: "Stockfilm", internet_archive: "Internet Archive", adobe_stock: "Adobe Stock", shutterstock: "Shutterstock", freesound: "Freesound", jamendo: "Jamendo" })[value] || value; }
+function label(value) { return ({ shutterstock: "Shutterstock", freesound: "Freesound", jamendo: "Jamendo" })[value] || value; }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]); }
 function escapeAttribute(value) { return escapeHtml(value); }

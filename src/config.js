@@ -20,11 +20,6 @@ export const config = {
     callbackBaseUrl: process.env.OAUTH_CALLBACK_BASE_URL || process.env.PUBLIC_BASE_URL || process.env.OPENROUTER_SITE_URL || "https://www.zitoai.xyz",
     stateSecret: process.env.OAUTH_STATE_SECRET || "",
     tokenEncryptionKey: process.env.OAUTH_TOKEN_ENCRYPTION_KEY || "",
-    adobe: {
-      clientId: process.env.ADOBE_STOCK_CLIENT_ID || "",
-      clientSecret: process.env.ADOBE_STOCK_CLIENT_SECRET || "",
-      scopes: process.env.ADOBE_STOCK_SCOPES || "openid,creative_sdk,offline_access",
-    },
     freesound: {
       clientId: process.env.FREESOUND_CLIENT_ID || "",
       clientSecret: process.env.FREESOUND_CLIENT_SECRET || "",
@@ -37,18 +32,7 @@ export const config = {
       scopes: process.env.SHUTTERSTOCK_SCOPES || "licenses.create licenses.view purchases.view",
     },
   },
-  providers: {
-    openverse: process.env.OPENVERSE_BASE_URL || "https://api.openverse.org/v1",
-    wikimedia:
-      process.env.WIKIMEDIA_API_URL ||
-      "https://commons.wikimedia.org/w/api.php",
-    freeToUse:
-      process.env.FREETOUSE_BASE_URL || "https://api.freetouse.com/v3",
-    stockfilm:
-      process.env.STOCKFILM_BASE_URL || "https://api.stockfilm.com/x402",
-  },
   credentials: {
-    adobe: { apiKey: process.env.ADOBE_STOCK_API_KEY || "" },
     shutterstock: { accessToken: process.env.SHUTTERSTOCK_ACCESS_TOKEN || "" },
     freesound: { apiKey: process.env.FREESOUND_API_KEY || "" },
     jamendo: { clientId: process.env.JAMENDO_CLIENT_ID || "" },

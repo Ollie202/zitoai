@@ -2,14 +2,6 @@
 
 The first authenticated adapters are intentionally search-only until credentials and provider agreements are present. They become active automatically when the corresponding environment variable is set.
 
-## Adobe Stock
-
-- Env: `ADOBE_STOCK_API_KEY`
-- Search: Adobe Stock Search API
-- Purchase: customer OAuth or Enterprise service account
-- Delivery: signed provider download URL only after customer entitlement/license is confirmed
-- Policy: central-account licensing for customers requires Adobe approval
-
 ## Shutterstock
 
 - Env: `SHUTTERSTOCK_ACCESS_TOKEN`
@@ -33,7 +25,3 @@ The first authenticated adapters are intentionally search-only until credentials
 - Purchase: provider-specific licensing/checkout
 - Delivery: verify track-level commercial rights and attribution
 - Policy: commercial API access requires a separate Jamendo agreement
-
-## Why the other providers remain catalog-only
-
-MotionElements, Epidemic Sound and Soundstripe have partner/account-specific entitlement flows that should not be guessed from public search documentation. Their catalog entries already define the adapter contract and the exact approval question; implement them only after credentials and a sample authorized response are available.

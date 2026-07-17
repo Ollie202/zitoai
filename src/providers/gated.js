@@ -1,35 +1,6 @@
 import { config } from "../config.js";
 import { fetchJson } from "../lib/http.js";
 
-const jsonHeaders = { "Content-Type": "application/json" };
-
-export const adobeStockProvider = {
-  id: "adobe_stock",
-  name: "Adobe Stock",
-  status: "approval_required",
-  requiresApiKey: true,
-  supportedAssetTypes: ["image", "video"],
-  isConfigured: () => Boolean(config.credentials.adobe.apiKey),
-  async search(brief, limit) {
-    if (!this.isConfigured()) throw new Error("Adobe Stock credentials are not configured");
-    const url = new URL("https://stock.adobe.io/Rest/Media/1/Search/Files");
-    url.searchParams.set("search_parameters[words]", brief.query);
-    url.searchParams.set("search_parameters[limit]", String(limit));
-    url.searchParams.set("search_parameters[filters][content_type:photo]", brief.assetType === "image" ? "1" : "0");
-    const body = await fetchJson(url, {
-      headers: { "x-api-key": config.credentials.adobe.apiKey, "x-product": "ZitoAI/0.1" },
-    });
-    return (body.files || []).map((item) => ({
-      id: String(item.id), provider: "adobe_stock", title: item.title || "Adobe Stock asset",
-      creator: item.creator?.name || "Adobe Stock contributor", assetType: brief.assetType,
-      previewUrl: item.thumbnail_url || item.thumbnail?.url || null, mediaUrl: null,
-      sourceUrl: `https://stock.adobe.com/asset/${item.id}`, priceUsd: null,
-      license: { code: "adobe-stock", name: "Adobe Stock license", url: "https://stock.adobe.com/license-terms", attributionRequired: false },
-      metadata: { category: item.category, width: item.width, height: item.height, requiresCustomerOAuth: true },
-    }));
-  },
-};
-
 export const shutterstockProvider = {
   id: "shutterstock", name: "Shutterstock", status: "image_license_ready",
   requiresApiKey: true, supportedAssetTypes: ["image"],
@@ -106,4 +77,4 @@ export const jamendoProvider = {
   },
 };
 
-export const gatedProviders = [adobeStockProvider, shutterstockProvider, freesoundProvider, jamendoProvider];
+export const gatedProviders = [shutterstockProvider, freesoundProvider, jamendoProvider];

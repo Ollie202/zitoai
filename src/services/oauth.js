@@ -4,13 +4,6 @@ import { authenticatedUser, saveProviderConnection } from "./supabase.js";
 import { fetchJson } from "../lib/http.js";
 
 const providers = {
-  adobe_stock: {
-    authorizeUrl: "https://ims-na1.adobelogin.com/ims/authorize/v2",
-    tokenUrl: "https://ims-na1.adobelogin.com/ims/token/v3",
-    clientId: () => config.oauth.adobe.clientId,
-    clientSecret: () => config.oauth.adobe.clientSecret,
-    scope: () => config.oauth.adobe.scopes,
-  },
   freesound: {
     authorizeUrl: "https://freesound.org/apiv2/oauth2/authorize/",
     tokenUrl: "https://freesound.org/apiv2/oauth2/access_token/",

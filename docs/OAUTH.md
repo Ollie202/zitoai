@@ -7,7 +7,6 @@ ZitoAI keeps provider access tokens on the server. Tokens are encrypted before t
 | Provider | Local callback | Current production callback |
 |---|---|---|
 | Freesound | `http://localhost:3000/auth/freesound/callback` | `https://www.zitoai.xyz/auth/freesound/callback` |
-| Adobe Stock | `http://localhost:3000/auth/adobe_stock/callback` | `https://www.zitoai.xyz/auth/adobe_stock/callback` |
 | Shutterstock | `http://localhost:3000/auth/shutterstock/callback` | `https://www.zitoai.xyz/auth/shutterstock/callback` |
 
 The production origin is `https://www.zitoai.xyz`. Register it exactly in each provider console and keep `OAUTH_CALLBACK_BASE_URL` identical.
@@ -16,7 +15,7 @@ The production origin is `https://www.zitoai.xyz`. Register it exactly in each p
 
 Generate two long, independent secrets for `OAUTH_STATE_SECRET` and `OAUTH_TOKEN_ENCRYPTION_KEY`. Add provider client IDs and secrets only on Railway; never add them to Vercel client variables or commit them.
 
-Adobe and Freesound use their documented authorization-code endpoints. Shutterstock endpoints are intentionally environment-configured because ZitoAI must not guess or hard-code a retired provider endpoint.
+Freesound and Shutterstock use their documented authorization-code endpoints. ZitoAI must not guess or hard-code a retired provider endpoint.
 
 ## Security flow
 

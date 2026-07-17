@@ -1,15 +1,11 @@
-# Providers that require signup, approval or provider credentials
+# Provider setup still required
 
-These are deliberately not wired into the public MVP yet:
+These are the only active licensing providers in the build:
 
 | Provider | What is needed | Planned integration |
 |---|---|---|
-| Adobe Stock | Enterprise, Affiliate or approved API access; customer OAuth or approved service-account workflow | Customer-authorized licensing only |
-| MotionElements | API secret key; public docs do not promise free production API access | Pay-per-item client-licensee flow; confirm API pricing first |
-| Shutterstock | Free image test account; paid API/partner plan for video and music | Not suitable for raw-file delivery through Platform License |
-| Freesound | API credentials; commercial API use negotiated case by case | Only after written commercial approval |
-| Jamendo | Developer registration/API key; commercial API use requires sales approval | Only after commercial API agreement |
-| Epidemic Sound | Free prototype key; production Partner API arrangement | Provider partnership required |
-| Soundstripe | Partner/Enterprise API agreement | Provider partnership required |
+| Shutterstock | OAuth app plus image-license scopes | Image licensing only |
+| Freesound | API key and, if needed, commercial approval | Sound effects, ambience, one-shots |
+| Jamendo | Developer registration/client ID and commercial agreement if needed | Songs and music tracks |
 
-For each provider, collect the API key through the provider's official developer portal. Store it only in `.env` or a secret manager, never in browser code, source control or result metadata.
+Store credentials only in `.env` or Railway variables.

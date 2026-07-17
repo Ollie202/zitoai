@@ -2,34 +2,17 @@
 
 | Provider | Current adapter | Access now | Best use | Main blocker |
 |---|---|---|---|---|
-| Wikimedia Commons | Live | Public API | Open media with attribution | File-level rights and third-party rights |
-| Openverse | Live | Public API | Broad open-media discovery | Original source must be verified |
-| Free To Use | Live | Public API | Music discovery and checkout handoff | Non-transferable license |
-| Stockfilm | Live | Public x402 discovery/rights | Vintage archival footage | Confirm named end-customer licensee before autonomous delivery |
-| Internet Archive | Live | Public API | Supplemental archival discovery | No blanket reuse permission; missing license is reject |
-| Adobe Stock | Credential-aware search | Apply/Enterprise/Affiliate/OAuth | Customer-authorized stock licensing | Approval and account/licensee model |
-| MotionElements | Catalog only | API key/account | Pay-per-item client procurement | Confirm free production API access |
-| Shutterstock | Credential-aware image search | Free test account / paid multimedia plans | In-app platform licensing | Free tier image-only; raw standalone delivery restricted |
-| Freesound | Credential-aware search | API key; commercial approval | Sound effects | Commercial API terms negotiated case by case |
-| Jamendo | Credential-aware search | Developer key; commercial approval | Music | Commercial API requires agreement |
-| Epidemic Sound | Catalog only | Free prototype; Partner API for launch | In-app music | Production partnership required |
-| Soundstripe | Catalog only | Partner/Enterprise | Music and SFX in platforms | Partnership and custom terms |
-| Lots of Sounds | Catalog only | Paid API | Sound effects | API subscription cost |
-| SoundsFree | No API | Website only | Procedural/browser sound tool | Do not scrape |
-| Musickits | No API | Website only | CC BY music | Do not scrape; request official feed |
-| Creative Commons chooser | No asset API | Public tool | Help creators choose a license | Not evidence for a specific asset |
+| Shutterstock | Credential-aware image licensing | OAuth app + API subscription | Image licensing | Requires the correct OAuth scopes and a valid image license path |
+| Freesound | Credential-aware search | API key / client credentials | Sound effects, ambience, one-shots | Commercial API approval and file-level CC terms |
+| Jamendo | Credential-aware search | Developer client ID | Songs and music tracks | Commercial API agreement |
 
-## Signup/API checklist
+## Current policy
 
-Before coding each gated provider, record:
+The app no longer routes search traffic to Adobe, MotionElements, Stockfilm, Soundstripe, Epidemic Sound, Lots of Sounds, SoundsFree, Musickits, Openverse, Wikimedia Commons or Internet Archive.
 
-1. Developer portal URL and account owner.
-2. Whether API access itself is free.
-3. Whether licensing credits/subscriptions are separate.
-4. OAuth scopes or API key permissions.
-5. Search, preview, rights, license and download endpoints.
-6. Whether the customer can be named as licensee.
-7. Whether raw files may be delivered outside the provider UI.
-8. Attribution, seat, project, territory and duration restrictions.
-9. Rate limits, webhook requirements and sandbox behavior.
-10. Provider contact's written answer for any unresolved transfer/resale question.
+## Integration order
+
+1. Search the active provider for the requested asset type.
+2. Preserve preview URL, source URL and license metadata.
+3. Require user confirmation before any licensing action.
+4. Record the transaction evidence in Supabase.

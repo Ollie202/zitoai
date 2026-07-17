@@ -4,7 +4,7 @@ import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "../src/se
 
 const input = {
   brief: { query: "Afrobeats instrumental", assetType: "music", intendedUse: "commercial_content", commercial: true, territory: "Nigeria and UK", budgetUsd: 50 },
-  asset: { id: "demo-1", provider: "wikimedia", title: "Demo track", creator: "Demo creator", sourceUrl: "https://example.com/asset", assetType: "music", license: { code: "cc-by-4.0", name: "CC BY 4.0", url: "https://creativecommons.org/licenses/by/4.0/", attributionRequired: true }, policy: { verdict: "allowed", summary: "Commercial use allowed with attribution.", checkoutRequired: false, rawDeliveryAllowed: true, warnings: ["Credit the creator."] } },
+  asset: { id: "demo-1", provider: "shutterstock", title: "Demo track", creator: "Demo creator", sourceUrl: "https://example.com/asset", assetType: "image", license: { code: "shutterstock-platform", name: "Shutterstock Platform License", url: "https://www.shutterstock.com/api/pricing", attributionRequired: false }, policy: { verdict: "review", summary: "Image licensing requires checkout evidence.", checkoutRequired: true, rawDeliveryAllowed: false, warnings: ["License the image through Shutterstock."] } },
   purchase: { providerOrderId: "FREE-DEMO-1", amount: 0, currency: "USD", status: "documented_free_asset", purchasedAt: "2026-07-16T09:00:00.000Z" },
 };
 

@@ -1,16 +1,19 @@
-# License Hunter provider documentation
+# ZitoAI provider docs
 
-License Hunter is an evidence-first asset procurement agent. It searches public catalogs, applies deterministic license-policy checks, and returns the original provider links and license terms. It does **not** issue a replacement license or provide legal advice.
+ZitoAI now works with three live licensing APIs:
+
+1. Shutterstock for image licensing.
+2. Freesound for sound effects, ambience and one-shots.
+3. Jamendo for songs and music tracks.
 
 ## Request lifecycle
 
 1. The user describes the asset and intended use.
-2. The local brief parser (or OpenRouter, when configured) normalizes the request.
-3. Provider connectors search only the providers compatible with the asset type.
-4. A deterministic routing layer ranks the most likely provider before querying fallbacks.
-5. The policy engine screens commercial use, attribution, transfer and source-verification constraints.
-6. Results are marked `allowed`, `review`, `checkout_only` or `rejected`.
-7. Paid purchasing is deliberately not exposed by the public-search MVP. A later payment module must enforce the OKX confirmation gate and identify the customer/licensee before delivery.
+2. The brief parser normalizes the request.
+3. Provider connectors search the three active providers only.
+4. The policy layer screens usage and license constraints.
+5. Results are marked `allowed`, `review`, `checkout_only` or `rejected`.
+6. Paid purchasing is deliberately gated behind user confirmation and provider-specific evidence.
 
 ## Run it
 
@@ -21,63 +24,37 @@ npm start
 
 Open <http://localhost:3000>.
 
-No API keys are required for the current public connectors. The service uses Node's built-in `fetch`; there is no dependency-install step.
-
 ## API surface
 
 ### `GET /api/health`
 
-Returns service version and whether OpenRouter is configured.
+Returns service version, brain config, storage config and OAuth config.
 
 ### `GET /api/providers`
 
-Returns public connector metadata and whether each connector requires credentials.
+Returns the three live provider definitions and whether each is configured.
 
 ### `POST /api/brief`
 
-Normalizes a user request. Example:
-
-```json
-{
-  "query": "dark cinematic music for a 30 second commercial",
-  "assetType": "music",
-  "intendedUse": "commercial_content",
-  "budgetUsd": 20
-}
-```
+Normalizes a user request.
 
 ### `POST /api/search`
 
-Runs the public connectors concurrently and applies policy checks:
-
-```json
-{
-  "query": "vintage beach footage",
-  "assetType": "video",
-  "intendedUse": "commercial_content",
-  "budgetUsd": 25,
-  "limit": 6,
-  "providers": ["stockfilm", "wikimedia"]
-}
-```
+Runs the three live providers concurrently and applies policy checks.
 
 ## Important policy decisions
 
-### Free To Use
+### Shutterstock
 
-Search is public. Its license is non-transferable, so the result is always `checkout_only`. The agent must not download under its own identity and forward the raw song to a customer.
+Use for image licensing only. Licensing requires the configured access token and the correct license scopes.
 
-### Openverse
+### Freesound
 
-Openverse is an aggregator and does not verify the original license. Results are always marked for source verification. The original source page, not Openverse, is the rights evidence.
+Use for sound effects and ambience. Keep file-level license terms attached to the evidence.
 
-### Wikimedia Commons
+### Jamendo
 
-Files with explicit open licenses can be delivered when the file-level conditions are followed. Attribution, ShareAlike and third-party rights remain the user's responsibility.
-
-### Stockfilm
-
-The x402 search and rights endpoints are public. Results include the x402 license URL and price. The autonomous purchase route is intentionally not wired into this MVP until Stockfilm confirms who is named licensee when an agent pays for an identified customer.
+Use for music tracks. Track-level commercial rights and attribution still need verification.
 
 ## Evidence bundle planned for the payment phase
 
@@ -91,4 +68,4 @@ The x402 search and rights endpoints are public. Results include the x402 licens
 - Attribution text
 - Download URL expiry and asset SHA-256
 
-The evidence bundle is proof of the provider transaction; it is not a new license issued by License Hunter.
+The evidence bundle is proof of the provider transaction; it is not a new license issued by ZitoAI.
