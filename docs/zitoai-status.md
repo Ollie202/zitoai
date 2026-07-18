@@ -59,7 +59,7 @@ ZitoAI is now built as an OKX.AI ASP service with an A2MCP-style API surface.
 - `www.zitoai.xyz` and `zitoai.xyz` still serve the public site.
 - The ASP endpoint is live over HTTPS.
 - Local install is current: `npm install` reports up to date with no vulnerabilities.
-- Local tests currently pass: `19/19`.
+- Local tests currently pass: `26/26`.
 
 ## Latest Railway smoke test
 
@@ -132,6 +132,45 @@ Live read-only check:
 Current honest status: Shutterstock search, metadata, subscription discovery, guarded license execution, and redownload plumbing are implemented. Actual license execution still requires a deliberate `confirmLicense=true` request using the current OAuth token and an eligible API subscription.
 
 Practical note for the demo: a free Shutterstock API subscription can work for API use, but it is separate from the Shutterstock website subscription. If the account is operating in a testing/comp-license mode, the API may return a dummy license that does not grant real usage rights.
+
+## Freesound sanity check
+
+Run date: 2026-07-18
+
+Docs checked:
+
+- `https://freesound.org/docs/api/`
+- `https://freesound.org/docs/api/authentication.html`
+- `https://freesound.org/docs/api/resources_apiv2.html`
+
+Verified against docs:
+
+- Freesound API v2 supports browsing/searching sounds and retrieving sound metadata, previews, packs, users, similar sounds, comments, and audio analysis data.
+- Token authentication is enough for read/search requests. ZitoAI uses the Freesound API key as the `token` query parameter for text search.
+- Search requests use `GET https://freesound.org/apiv2/search/text/`.
+- Search requests request only useful fields: `id`, `name`, `username`, `license`, `previews`, `duration`, `tags`, `description`, and `url`.
+- Results expose Freesound preview URLs, source URLs, creator names, duration, tags, descriptions, and license URLs/references.
+- OAuth2 is correctly treated as required for original-quality downloads and user-account actions.
+- ZitoAI has OAuth start/callback plumbing for Freesound and stores encrypted provider tokens through Supabase.
+- Original download is guarded behind `POST /api/providers/freesound/sounds/:id/download` and requires an authenticated connected Freesound user.
+- Freesound is correctly scoped to sound effects, ambience, and one-shots. Music-track requests should route to Jamendo, not Freesound.
+
+Live check:
+
+- `GET /api/providers/freesound/status` returned `200`.
+- Live status shows `configured=true` and `oauthConfigured=true`.
+- OAuth callback is `https://asp.zitoai.xyz/auth/freesound/callback`.
+- 10/10 natural-language Freesound ASP prompts returned:
+  - recommended provider: `freesound`
+  - inferred scope: `sound_effect`
+  - preview URL
+  - source URL
+  - license reference
+  - policy verdict: `review`
+- `GET /api/providers/freesound/me` without an authenticated user safely returned `400` with `Authentication required.`
+- `POST /api/providers/freesound/sounds/:id/download` without an authenticated user safely returned `400` with `Authentication required.`
+
+Current honest status: Freesound search, previews, metadata, license/reference exposure, natural-language routing, OAuth connection plumbing, and guarded original-download endpoint are implemented. ZitoAI does not buy Freesound licenses because Freesound’s API is not a purchase/licensing checkout API; the correct workflow is to surface each sound’s Creative Commons/license terms and require user review before reuse.
 
 ## What still needs real user/provider action
 
