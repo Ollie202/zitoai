@@ -48,12 +48,62 @@ test("Jamendo search uses read-only catalog API with commercial licensing filter
     assert.match(requestedUrl, /include=musicinfo\+licenses/);
     assert.match(requestedUrl, /prolicensing=1/);
     assert.match(requestedUrl, /groupby=artist_id/);
+    assert.match(requestedUrl, /type=single\+albumtrack/);
     assert.equal(results[0].previewUrl, "https://audio.example/stream.mp3");
     assert.equal(results[0].mediaUrl, null);
     assert.equal(results[0].purchaseUrl, "https://licensing.jamendo.com/track/123");
     assert.deepEqual(results[0].metadata.tags, ["pop", "uplifting"]);
     assert.equal(results[0].metadata.proLicenseUrl, "https://licensing.jamendo.com/track/123");
     assert.equal(results[0].metadata.jamendoReadOnlyApi, true);
+  } finally {
+    globalThis.fetch = previousFetch;
+    config.credentials.jamendo.clientId = previousClientId;
+  }
+});
+
+test("Jamendo falls back to tag discovery when exact commercial search is empty", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousClientId = config.credentials.jamendo.clientId;
+  const requestedUrls = [];
+
+  config.credentials.jamendo.clientId = "jamendo-client";
+  globalThis.fetch = async (url) => {
+    requestedUrls.push(String(url));
+    const isFallback = !String(url).includes("search=");
+    return new Response(JSON.stringify({
+      headers: { status: "success" },
+      results: isFallback ? [
+        {
+          id: "456",
+          name: "Upbeat Background Music",
+          artist_name: "Jam Artist",
+          audio: "https://audio.example/upbeat.mp3",
+          shareurl: "https://www.jamendo.com/track/456",
+          prourl: "https://licensing.jamendo.com/track/456",
+          audiodownload_allowed: false,
+          musicinfo: { tags: { vartags: ["upbeat"] } },
+        },
+      ] : [],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    const results = await jamendoProvider.search({
+      query: "upbeat advert music",
+      assetType: "music",
+      commercial: true,
+      keywords: ["upbeat", "advert", "music"],
+    }, 6);
+
+    assert.equal(requestedUrls.length, 2);
+    assert.match(requestedUrls[0], /search=upbeat\+advert\+music/);
+    assert.doesNotMatch(requestedUrls[1], /search=/);
+    assert.match(requestedUrls[1], /order=popularity_total/);
+    assert.match(requestedUrls[1], /fuzzytags=upbeat/);
+    assert.equal(results[0].title, "Upbeat Background Music");
+    assert.equal(results[0].provider, "jamendo");
+    assert.equal(results[0].metadata.checkoutEvidenceRequired, true);
+    assert.equal(results[0].metadata.licenseCertificateRequired, true);
   } finally {
     globalThis.fetch = previousFetch;
     config.credentials.jamendo.clientId = previousClientId;

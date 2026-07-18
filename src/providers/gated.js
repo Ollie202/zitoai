@@ -38,7 +38,7 @@ export const shutterstockProvider = {
 
 export const freesoundProvider = {
   id: "freesound", name: "Freesound", status: "commercial_approval_required",
-  requiresApiKey: true, supportedAssetTypes: ["sound_effect", "music"],
+  requiresApiKey: true, supportedAssetTypes: ["sound_effect"],
   isConfigured: () => Boolean(config.credentials.freesound.apiKey),
   async search(brief, limit) {
     if (!this.isConfigured()) throw new Error("Freesound API key is not configured");
@@ -65,31 +65,7 @@ export const jamendoProvider = {
   isConfigured: () => Boolean(config.credentials.jamendo.clientId),
   async search(brief, limit) {
     if (!this.isConfigured()) throw new Error("Jamendo client ID is not configured");
-    const url = new URL("https://api.jamendo.com/v3.0/tracks/");
-    const keywords = Array.from(new Set((brief.keywords || []).filter(Boolean))).slice(0, 6);
-
-    url.searchParams.set("client_id", config.credentials.jamendo.clientId);
-    url.searchParams.set("format", "json");
-    url.searchParams.set("limit", String(limit));
-    url.searchParams.set("order", "relevance");
-    url.searchParams.set("audioformat", "mp32");
-    url.searchParams.set("audiodlformat", "mp32");
-    url.searchParams.set("include", "musicinfo licenses");
-    url.searchParams.set("groupby", "artist_id");
-    url.searchParams.set("search", brief.query);
-
-    if (brief.commercial) {
-      url.searchParams.set("prolicensing", "1");
-    }
-
-    if (keywords.length) {
-      url.searchParams.set("fuzzytags", keywords.join(" "));
-    }
-
-    const body = await fetchJson(url);
-    if (body.headers?.status === "failed") {
-      throw new Error(body.headers.error_message || "Jamendo search failed");
-    }
+    const body = await fetchJamendoTracks(brief, limit);
     return (body.results || []).map((item) => ({
       id: String(item.id), provider: "jamendo", title: item.name, creator: item.artist_name || "Jamendo artist",
       assetType: "music",
@@ -110,6 +86,9 @@ export const jamendoProvider = {
         album: item.album_name,
         image: item.image || item.album_image || null,
         duration: item.duration,
+        position: item.position ?? null,
+        releasedate: item.releasedate || null,
+        musicInfoLoaded: Boolean(item.musicinfo),
         tags: flattenJamendoTags(item.musicinfo?.tags),
         description: item.musicinfo?.description || null,
         musicinfo: item.musicinfo || null,
@@ -120,6 +99,8 @@ export const jamendoProvider = {
         rawDownloadUrl: item.audiodownload_allowed ? item.audiodownload || null : null,
         contentIdFree: item.content_id_free ?? null,
         commercialProgramMatched: Boolean(item.prourl) || Boolean(brief.commercial),
+        checkoutEvidenceRequired: true,
+        licenseCertificateRequired: true,
         jamendoReadOnlyApi: true,
       },
     }));
@@ -131,4 +112,110 @@ export const gatedProviders = [shutterstockProvider, freesoundProvider, jamendoP
 function flattenJamendoTags(tags = {}) {
   if (!tags || typeof tags !== "object") return [];
   return Object.values(tags).flatMap((value) => Array.isArray(value) ? value : []).filter(Boolean);
+}
+
+async function fetchJamendoTracks(brief, limit) {
+  const primary = buildJamendoTracksUrl(brief, limit, { mode: "primary" });
+  const primaryBody = await fetchJamendoResponse(primary);
+  if ((primaryBody.results || []).length > 0) return primaryBody;
+
+  const fallback = buildJamendoTracksUrl(brief, limit, { mode: "discovery" });
+  const fallbackBody = await fetchJamendoResponse(fallback);
+  return {
+    ...fallbackBody,
+    metadata: {
+      ...(fallbackBody.metadata || {}),
+      fallbackFrom: primary.toString(),
+      fallbackReason: "primary_jamendo_search_returned_zero_results",
+    },
+  };
+}
+
+async function fetchJamendoResponse(url) {
+  const body = await fetchJson(url);
+  if (body.headers?.status === "failed") {
+    throw new Error(body.headers.error_message || "Jamendo search failed");
+  }
+  return body;
+}
+
+function buildJamendoTracksUrl(brief, limit, { mode }) {
+  const url = new URL("https://api.jamendo.com/v3.0/tracks/");
+  const keywords = usefulJamendoKeywords(brief);
+
+  url.searchParams.set("client_id", config.credentials.jamendo.clientId);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("order", mode === "discovery" ? "popularity_total" : "relevance");
+  url.searchParams.set("audioformat", "mp32");
+  url.searchParams.set("audiodlformat", "mp32");
+  url.searchParams.set("include", "musicinfo licenses");
+  url.searchParams.set("groupby", "artist_id");
+  url.searchParams.set("type", "single albumtrack");
+
+  if (mode === "primary") {
+    url.searchParams.set("search", brief.query);
+  }
+
+  if (brief.commercial) {
+    url.searchParams.set("prolicensing", "1");
+  }
+
+  if (needsContentIdSafeTrack(brief)) {
+    url.searchParams.set("content_id_free", "1");
+  }
+
+  if (keywords.length) {
+    url.searchParams.set("fuzzytags", keywords.join(" "));
+  }
+
+  if (wantsInstrumental(brief)) {
+    url.searchParams.set("vocalinstrumental", "instrumental");
+  }
+
+  const speed = requestedSpeed(brief);
+  if (speed) {
+    url.searchParams.set("speed", speed);
+  }
+
+  return url;
+}
+
+function usefulJamendoKeywords(brief) {
+  const generic = new Set([
+    "advert",
+    "advertising",
+    "background",
+    "brand",
+    "campaign",
+    "commercial",
+    "content",
+    "license",
+    "licensing",
+    "music",
+    "song",
+    "track",
+    "video",
+  ]);
+  return Array.from(new Set((brief.keywords || [])
+    .map((word) => String(word).toLowerCase().trim())
+    .filter((word) => word.length > 2 && !generic.has(word))))
+    .slice(0, 6);
+}
+
+function wantsInstrumental(brief) {
+  const text = `${brief.query} ${brief.intendedUse || ""}`.toLowerCase();
+  return /\binstrumental\b|\bno vocals?\b|\bvoiceover\b|\bbackground\b/.test(text);
+}
+
+function requestedSpeed(brief) {
+  const text = `${brief.query} ${(brief.keywords || []).join(" ")}`.toLowerCase();
+  if (/\bfast\b|\bupbeat\b|\benergetic\b|\bhigh energy\b/.test(text)) return "high";
+  if (/\bslow\b|\bcalm\b|\bsoft\b|\brelax(ed|ing)?\b/.test(text)) return "low";
+  return null;
+}
+
+function needsContentIdSafeTrack(brief) {
+  const text = `${brief.query} ${brief.intendedUse || ""}`.toLowerCase();
+  return brief.broadcast || /\byoutube\b|\bcontent id\b|\bmoneti[sz]ed\b|\bsocial\b|\btiktok\b|\breels?\b/.test(text);
 }
