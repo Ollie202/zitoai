@@ -42,19 +42,13 @@ export const freesoundProvider = {
   isConfigured: () => Boolean(config.credentials.freesound.apiKey),
   async search(brief, limit) {
     if (!this.isConfigured()) throw new Error("Freesound API key is not configured");
-    const url = new URL("https://freesound.org/apiv2/search/text/");
-    url.searchParams.set("query", brief.query);
-    url.searchParams.set("token", config.credentials.freesound.apiKey);
-    url.searchParams.set("page_size", String(limit));
-    url.searchParams.set("fields", "id,name,username,license,previews,duration,tags,description,url");
-    url.searchParams.set("group_by_pack", "0");
-    const body = await fetchJson(url);
+    const body = await fetchFreesoundSounds(brief, limit);
     return (body.results || []).map((item) => ({
       id: String(item.id), provider: "freesound", title: item.name, creator: item.username || "Freesound contributor",
       assetType: brief.assetType, previewUrl: item.previews?.["preview-hq-mp3"] || item.previews?.["preview-lq-ogg"] || item.previews?.["preview-lq-mp3"] || null,
       mediaUrl: null, sourceUrl: item.url || `https://freesound.org/people/${encodeURIComponent(item.username || "")}/sounds/${item.id}/`, priceUsd: 0,
       license: { code: item.license || null, name: item.license || null, url: "https://freesound.org/help/tos_api/", attributionRequired: item.license !== "Creative Commons 0" },
-      metadata: { duration: item.duration, tags: item.tags || [], description: item.description || null, apiCommercialApprovalRequired: true, oauth2RequiredForOriginalDownload: true },
+      metadata: { duration: item.duration, tags: item.tags || [], description: item.description || null, apiCommercialApprovalRequired: true, oauth2RequiredForOriginalDownload: true, searchFallbackUsed: Boolean(body.metadata?.fallbackReason) },
     }));
   },
 };
@@ -109,6 +103,60 @@ export const jamendoProvider = {
 };
 
 export const gatedProviders = [shutterstockProvider, freesoundProvider, jamendoProvider];
+
+async function fetchFreesoundSounds(brief, limit) {
+  const primary = buildFreesoundSearchUrl(brief.query, limit);
+  const primaryBody = await fetchJson(primary);
+  if ((primaryBody.results || []).length > 0) return primaryBody;
+
+  const fallbackQuery = usefulFreesoundKeywords(brief).join(" ");
+  if (!fallbackQuery || fallbackQuery === brief.query) return primaryBody;
+  const fallback = buildFreesoundSearchUrl(fallbackQuery, limit);
+  const fallbackBody = await fetchJson(fallback);
+  return {
+    ...fallbackBody,
+    metadata: {
+      ...(fallbackBody.metadata || {}),
+      fallbackFrom: primary.toString(),
+      fallbackReason: "primary_freesound_search_returned_zero_results",
+    },
+  };
+}
+
+function buildFreesoundSearchUrl(query, limit) {
+  const url = new URL("https://freesound.org/apiv2/search/text/");
+  url.searchParams.set("query", query);
+  url.searchParams.set("token", config.credentials.freesound.apiKey);
+  url.searchParams.set("page_size", String(limit));
+  url.searchParams.set("fields", "id,name,username,license,previews,duration,tags,description,url");
+  url.searchParams.set("group_by_pack", "0");
+  return url;
+}
+
+function usefulFreesoundKeywords(brief) {
+  const generic = new Set([
+    "background",
+    "brand",
+    "campaign",
+    "commercial",
+    "content",
+    "effect",
+    "find",
+    "for",
+    "from",
+    "app",
+    "need",
+    "meditation",
+    "sound",
+    "sfx",
+    "video",
+  ]);
+  const text = `${brief.query} ${(brief.keywords || []).join(" ")}`.toLowerCase();
+  return Array.from(new Set(text
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 2 && !generic.has(word))))
+    .slice(0, 8);
+}
 
 function flattenJamendoTags(tags = {}) {
   if (!tags || typeof tags !== "object") return [];
