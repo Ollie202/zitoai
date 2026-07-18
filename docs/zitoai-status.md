@@ -84,6 +84,22 @@ Run date: 2026-07-18
 
 Current honest status: all three provider lanes are now ready for structured Railway endpoint testing. Jamendo remains a checkout-handoff provider, not an API-purchase provider.
 
+## Full prompt smoke test
+
+Run date: 2026-07-18
+
+- 10/10 Shutterstock prompts passed.
+- 10/10 Freesound prompts passed.
+- 10/10 Jamendo prompts passed.
+- Every passing result returned:
+  - the correct inferred scope
+  - the intended recommended provider
+  - a preview URL
+  - license terms or license reference
+  - a purchase / source / checkout link
+
+This is the first confirmed end-to-end natural-language ASP smoke test for all three provider lanes.
+
 ## What still needs real user/provider action
 
 - Freesound live OAuth approval still requires the user to connect an actual Freesound account.
