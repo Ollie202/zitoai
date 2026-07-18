@@ -16,7 +16,7 @@ export const config = {
       process.env.OPENROUTER_SMART_MODEL || "openai/gpt-4o-mini",
     siteUrl: process.env.OPENROUTER_SITE_URL || process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
     appName: process.env.OPENROUTER_APP_NAME || "ZitoAI",
-    maxSpendUsd: Number(process.env.OPENROUTER_MAX_SPEND_USD || 5),
+    maxSpendUsd: parseOptionalNumber(process.env.OPENROUTER_MAX_SPEND_USD),
     maxCallsPerMinute: Number(process.env.OPENROUTER_MAX_CALLS_PER_MINUTE || 20),
     maxInputChars: Number(process.env.OPENROUTER_MAX_INPUT_CHARS || 12000),
   },
@@ -68,4 +68,10 @@ function loadEnvFile(path) {
     }
     process.env[key] = value;
   }
+}
+
+function parseOptionalNumber(value) {
+  if (value == null || String(value).trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }

@@ -69,7 +69,9 @@ export function openRouterGuardrailStatus() {
     maxCallsPerMinute: config.openRouter.maxCallsPerMinute,
     maxInputChars: config.openRouter.maxInputChars,
     recentCallsLastMinute: recentCallCount(),
-    remainingEstimatedUsd: Number(Math.max(0, config.openRouter.maxSpendUsd - openRouterUsage.estimatedSpendUsd).toFixed(8)),
+    remainingEstimatedUsd: Number.isFinite(config.openRouter.maxSpendUsd)
+      ? Number(Math.max(0, config.openRouter.maxSpendUsd - openRouterUsage.estimatedSpendUsd).toFixed(8))
+      : null,
     recentEvents: openRouterUsage.events.slice(-10),
   };
 }
@@ -278,7 +280,7 @@ function applyRanking(candidates, ranked) {
 }
 
 function canCallOpenRouter(functionName, input) {
-  if (config.openRouter.maxSpendUsd <= openRouterUsage.estimatedSpendUsd) {
+  if (Number.isFinite(config.openRouter.maxSpendUsd) && config.openRouter.maxSpendUsd <= openRouterUsage.estimatedSpendUsd) {
     return { ok: false, reason: `OpenRouter budget guard blocked ${functionName}: estimated spend reached $${config.openRouter.maxSpendUsd}` };
   }
   if (recentCallCount() >= config.openRouter.maxCallsPerMinute) {

@@ -122,9 +122,9 @@ Verified against docs and local behavior:
 - `parse_brief` validates the model output enum values before using them and falls back to local parsing on failure.
 - `rank_results` validates every returned `asset_id/source` pair against the candidate list before reordering; invalid rankings fall back to the original deterministic order.
 - Guardrails are active:
-  - default cumulative spend cap: `$5`
   - default per-minute call cap: `20`
   - default input-size cap: `12000` characters
+  - spend limiting is intentionally left to the OpenRouter-side key/budget configuration
   - every OpenRouter call logs function name, model, token usage, token cost, success/failure, and fallback reason where applicable
   - current runtime spend/guardrail status is exposed through `GET /api/health` under `brain.guardrails`
 
