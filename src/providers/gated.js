@@ -105,22 +105,28 @@ export const jamendoProvider = {
 export const gatedProviders = [shutterstockProvider, freesoundProvider, jamendoProvider];
 
 async function fetchFreesoundSounds(brief, limit) {
-  const primary = buildFreesoundSearchUrl(brief.query, limit);
-  const primaryBody = await fetchJson(primary);
-  if ((primaryBody.results || []).length > 0) return primaryBody;
-
-  const fallbackQuery = usefulFreesoundKeywords(brief).join(" ");
-  if (!fallbackQuery || fallbackQuery === brief.query) return primaryBody;
-  const fallback = buildFreesoundSearchUrl(fallbackQuery, limit);
-  const fallbackBody = await fetchJson(fallback);
-  return {
-    ...fallbackBody,
-    metadata: {
-      ...(fallbackBody.metadata || {}),
-      fallbackFrom: primary.toString(),
-      fallbackReason: "primary_freesound_search_returned_zero_results",
-    },
-  };
+  const candidates = freesoundQueryCandidates(brief);
+  let firstUrl = null;
+  for (let index = 0; index < candidates.length; index += 1) {
+    const url = buildFreesoundSearchUrl(candidates[index], limit);
+    if (!firstUrl) firstUrl = url;
+    const body = await fetchJson(url);
+    if ((body.results || []).length > 0) {
+      return index === 0
+        ? body
+        : {
+            ...body,
+            metadata: {
+              ...(body.metadata || {}),
+              fallbackFrom: firstUrl.toString(),
+              fallbackReason: "primary_freesound_search_returned_zero_results",
+              fallbackQuery: candidates[index],
+            },
+          };
+    }
+  }
+  const finalBody = await fetchJson(buildFreesoundSearchUrl(candidates[0], limit));
+  return finalBody;
 }
 
 function buildFreesoundSearchUrl(query, limit) {
@@ -156,6 +162,16 @@ function usefulFreesoundKeywords(brief) {
     .split(/[^a-z0-9]+/)
     .filter((word) => word.length > 2 && !generic.has(word))))
     .slice(0, 8);
+}
+
+function freesoundQueryCandidates(brief) {
+  const keywords = usefulFreesoundKeywords(brief);
+  const candidates = [];
+  const primary = String(brief.query || "").trim();
+  if (primary) candidates.push(primary);
+  if (keywords.length) candidates.push(keywords.join(" "));
+  for (const word of keywords.slice(0, 5)) candidates.push(word);
+  return Array.from(new Set(candidates.filter(Boolean)));
 }
 
 function flattenJamendoTags(tags = {}) {
