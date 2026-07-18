@@ -99,6 +99,12 @@ export async function licenseShutterstockImage(input = {}) {
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(licenseRequest),
     timeoutMs: 20_000,
+  }).catch((error) => {
+    if (error.status === 401 || error.status === 403) {
+      const reason = error.body?.message || error.body?.detail || error.body?.error || "Shutterstock token is missing licensing scope or an active entitlement";
+      throw new Error(`Shutterstock licensing failed: ${reason}`);
+    }
+    throw error;
   });
 
   const first = Array.isArray(body?.data) ? body.data[0] : null;

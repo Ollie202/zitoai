@@ -6,6 +6,7 @@ import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
 import { brainStatus, normalizeBrief } from "./services/openrouter.js";
+import { deterministicMediaSearch } from "./services/deterministic-media-search.js";
 import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
 import { completeOAuth, oauthStatus, startOAuth } from "./services/oauth.js";
@@ -139,7 +140,8 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", role: "ASP", protocol: "A2MCP", paymentRequired: false });
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/media-search") {
-      return json(response, 200, wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request))));
+      const result = await deterministicMediaSearch(await readJson(request));
+      return json(response, 200, wrapA2McpResult("rights-media-search", result.results));
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/evidence-manifest") {
       return json(response, 200, wrapA2McpResult("license-evidence-manifest", buildEvidenceManifest(await readJson(request))));

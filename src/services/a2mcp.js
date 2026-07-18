@@ -9,14 +9,14 @@ export function buildA2McpManifest() {
     name: "ZitoAI",
     role: "ASP",
     serviceType: "A2MCP",
-    description: "Rights-aware media procurement API for images, sound effects, ambience, one-shots, and music tracks.",
+    description: "Deterministic rights-aware media procurement API for images, sound effects, ambience, one-shots, and music tracks.",
     baseUrl,
     websiteUrl: config.publicBaseUrl.replace(/\/+$/, ""),
     billing: {
       type: "free",
       paymentRequired: false,
       x402: false,
-      note: "Hackathon endpoints are free A2MCP-style APIs. Paid x402 can be added after marketplace approval.",
+      note: "Hackathon endpoints are free deterministic A2MCP-style APIs. Paid x402 can be added after marketplace approval.",
     },
     services: [
       {
@@ -26,7 +26,7 @@ export function buildA2McpManifest() {
         endpoint: `${baseUrl}/api/a2mcp/media-search`,
         price: "0",
         pricingType: "free",
-        description: "Takes a natural-language media brief and returns provider-ranked licensable candidates with policy warnings and next licensing step.",
+        description: "Takes a media brief and returns normalized provider candidates with preview URLs, license metadata, and the next licensing step.",
         inputSchema: {
           type: "object",
           required: ["query", "assetType"],

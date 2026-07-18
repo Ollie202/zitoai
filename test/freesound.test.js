@@ -33,7 +33,7 @@ test("Freesound search uses the v2 search endpoint with token auth and preview f
 
   try {
     const results = await freesoundProvider.search({ query: "ambient loop", assetType: "sound_effect" }, 1);
-    assert.equal(requestedUrl.startsWith("https://freesound.org/apiv2/search/?"), true);
+    assert.equal(requestedUrl.startsWith("https://freesound.org/apiv2/search/text/?"), true);
     assert.match(requestedUrl, /token=fs-token/);
     assert.match(requestedUrl, /fields=id%2Cname%2Cusername%2Clicense%2Cpreviews%2Cduration%2Ctags%2Cdescription%2Curl/);
     assert.equal(results[0].title, "Ambient loop");

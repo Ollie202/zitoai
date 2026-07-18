@@ -42,7 +42,7 @@ export const freesoundProvider = {
   isConfigured: () => Boolean(config.credentials.freesound.apiKey),
   async search(brief, limit) {
     if (!this.isConfigured()) throw new Error("Freesound API key is not configured");
-    const url = new URL("https://freesound.org/apiv2/search/");
+    const url = new URL("https://freesound.org/apiv2/search/text/");
     url.searchParams.set("query", brief.query);
     url.searchParams.set("token", config.credentials.freesound.apiKey);
     url.searchParams.set("page_size", String(limit));
@@ -73,10 +73,10 @@ export const jamendoProvider = {
       mediaUrl: item.audiodownload_allowed ? item.audiodownload || null : null,
       sourceUrl: item.shareurl || `https://www.jamendo.com/track/${item.id}`,
       purchaseUrl: item.prourl || item.shareurl || `https://www.jamendo.com/track/${item.id}`,
-      priceUsd: null,
+      priceUsd: 0,
       license: {
         code: item.license_ccurl || "jamendo-license",
-        name: item.prourl ? "Jamendo commercial licensing available" : item.license_ccurl || "Jamendo track license",
+        name: item.prourl ? "Jamendo licensing handoff" : item.license_ccurl || "Jamendo track license",
         url: item.prourl || item.license_ccurl || "https://developer.jamendo.com/v3.0/docs",
         attributionRequired: true,
       },
@@ -101,6 +101,7 @@ export const jamendoProvider = {
         commercialProgramMatched: Boolean(item.prourl) || Boolean(brief.commercial),
         checkoutEvidenceRequired: true,
         licenseCertificateRequired: true,
+        deterministicCommercialGate: true,
         jamendoReadOnlyApi: true,
       },
     }));

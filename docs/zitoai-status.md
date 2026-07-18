@@ -76,6 +76,11 @@ Run date: 2026-07-18
   - Jamendo now uses stricter music-track filters and richer metadata from the Tracks API.
   - Jamendo now falls back to tag-based discovery when exact commercial search returns zero results.
   - Local live checks returned Jamendo tracks for `upbeat advert music`, `corporate instrumental background`, `cinematic music`, and `ambient music`, each with preview and checkout/handoff URL.
+- The public A2MCP `media-search` route now serves the deterministic, no-OpenRouter contract from the build spec, returning normalized results for the selected source.
+- The deterministic A2MCP route now applies the spec’s hard gate:
+  - Jamendo and Freesound do not appear in commercial `media-search` music results.
+  - Jamendo still works for non-commercial music discovery.
+  - Every returned result includes a preview URL, license type, price, and attribution flag/text in the normalized shape.
 
 Current honest status: all three provider lanes are now ready for structured Railway endpoint testing. Jamendo remains a checkout-handoff provider, not an API-purchase provider.
 
