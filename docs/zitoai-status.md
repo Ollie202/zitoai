@@ -121,6 +121,7 @@ Verified against docs and local behavior:
 - The LLM does not decide licensing eligibility; source routing, provider filtering, provider policy, and licensing gates remain deterministic.
 - `parse_brief` validates the model output enum values before using them and falls back to local parsing on failure.
 - `rank_results` validates every returned `asset_id/source` pair against the candidate list before reordering; invalid rankings fall back to the original deterministic order.
+- Sound-effect cue handling was tightened after live smoke testing so prompts like ambience, room tone, rain, clicks, pings, whooshes, and birds stay in the Freesound lane instead of drifting to music.
 - Guardrails are active:
   - default per-minute call cap: `20`
   - default input-size cap: `12000` characters

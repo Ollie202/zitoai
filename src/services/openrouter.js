@@ -219,7 +219,7 @@ function buildBriefResult(body, local, input) {
   const usageRights = validated.usage_rights;
   const brief = {
     ...local,
-    assetType: input.assetType || ASSET_TYPE_MAP[validated.asset_type] || local.assetType,
+    assetType: input.assetType || resolveAssetType(local.assetType, validated.asset_type),
     intendedUse: input.intendedUse || usageRightsToIntendedUse(usageRights),
     commercial: input.commercial === true || ["commercial", "broadcast", "resale"].includes(usageRights),
     broadcast: input.broadcast === true || usageRights === "broadcast",
@@ -334,4 +334,10 @@ function mergeKeywords(modelKeywords, localKeywords) {
 
 function oneLine(value) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+function resolveAssetType(localAssetType, parsedAssetType) {
+  const parsed = ASSET_TYPE_MAP[parsedAssetType] || localAssetType;
+  if (localAssetType && localAssetType !== "music") return localAssetType;
+  return parsed;
 }

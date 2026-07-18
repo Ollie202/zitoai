@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { config } from "../src/config.js";
+import { normalizeBriefLocally } from "../src/core/brief.js";
 import { selectModel } from "../src/services/openrouter.js";
 
 test("simple discovery briefs use the fast model", () => {
@@ -9,4 +10,8 @@ test("simple discovery briefs use the fast model", () => {
 
 test("ranking requests use the smart model", () => {
   assert.equal(selectModel({ rankResults: true }), config.openRouter.smartModel);
+});
+
+test("rain ambience briefs resolve to sound_effect", () => {
+  assert.equal(normalizeBriefLocally({ query: "Gentle rain ambience for meditation" }).assetType, "sound_effect");
 });
