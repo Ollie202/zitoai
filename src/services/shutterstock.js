@@ -4,7 +4,7 @@ import { fetchJson } from "../lib/http.js";
 const DEFAULT_IMAGE_SIZE = "huge";
 const DEFAULT_IMAGE_FORMAT = "jpg";
 
-function apiBase() {
+export function shutterstockApiBase() {
   return String(config.credentials.shutterstock.apiBase || "https://api.shutterstock.com/v2").replace(/\/$/, "");
 }
 
@@ -18,8 +18,8 @@ function authHeaders() {
 export function shutterstockStatus() {
   return {
     configured: Boolean(config.credentials.shutterstock.accessToken),
-    apiBase: apiBase(),
-    sandbox: apiBase().includes("api-sandbox.shutterstock.com"),
+    apiBase: shutterstockApiBase(),
+    sandbox: shutterstockApiBase().includes("api-sandbox.shutterstock.com"),
     requiredScopes: ["licenses.create", "licenses.view", "purchases.view"],
     imageLicensingEndpoint: "/api/providers/shutterstock/license",
     imageLicensesEndpoint: "/api/providers/shutterstock/licenses",
@@ -27,19 +27,19 @@ export function shutterstockStatus() {
 }
 
 export async function listShutterstockImageCategories() {
-  const url = new URL(`${apiBase()}/images/categories`);
+  const url = new URL(`${shutterstockApiBase()}/images/categories`);
   return fetchJson(url, { headers: authHeaders() });
 }
 
 export async function listShutterstockSubscriptions() {
-  const url = new URL(`${apiBase()}/user/subscriptions`);
+  const url = new URL(`${shutterstockApiBase()}/user/subscriptions`);
   return fetchJson(url, { headers: authHeaders() });
 }
 
 export async function getShutterstockImageDetails(imageId) {
   const id = String(imageId || "").trim();
   if (!id) throw new Error("Shutterstock imageId is required");
-  const url = new URL(`${apiBase()}/images/${encodeURIComponent(id)}`);
+  const url = new URL(`${shutterstockApiBase()}/images/${encodeURIComponent(id)}`);
   url.searchParams.set("view", "full");
   return fetchJson(url, { headers: authHeaders() });
 }
@@ -94,7 +94,7 @@ export async function licenseShutterstockImage(input = {}) {
   const normalizedInput = await resolveImageLicenseDefaults(input);
   const licenseRequest = buildShutterstockImageLicenseRequest(normalizedInput);
 
-  const body = await fetchJson(`${apiBase()}/images/licenses`, {
+  const body = await fetchJson(`${shutterstockApiBase()}/images/licenses`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(licenseRequest),
@@ -116,8 +116,8 @@ export async function licenseShutterstockImage(input = {}) {
     subscriptionId: image.subscription_id || null,
     size: image.size,
     format: image.format,
-    apiBase: apiBase(),
-    sandbox: apiBase().includes("api-sandbox.shutterstock.com"),
+    apiBase: shutterstockApiBase(),
+    sandbox: shutterstockApiBase().includes("api-sandbox.shutterstock.com"),
     allotmentCharge: first?.allotment_charge ?? null,
     licenseId: first?.id || first?.license_id || null,
     downloadUrl: first?.download?.url || null,
@@ -162,7 +162,7 @@ async function resolveImageLicenseDefaults(input = {}) {
 }
 
 export async function listShutterstockImageLicenses(input = {}) {
-  const url = new URL(`${apiBase()}/images/licenses`);
+  const url = new URL(`${shutterstockApiBase()}/images/licenses`);
   if (input.imageId) url.searchParams.set("image_id", String(input.imageId).trim());
   if (input.licenseId) url.searchParams.set("id", String(input.licenseId).trim());
   if (input.page) url.searchParams.set("page", String(input.page));
@@ -177,7 +177,7 @@ export async function redownloadShutterstockImage(input = {}) {
   if (input.size) body.size = String(input.size).trim();
   if (input.format) body.format = String(input.format).trim();
 
-  const response = await fetchJson(`${apiBase()}/images/licenses/${encodeURIComponent(licenseId)}/downloads`, {
+  const response = await fetchJson(`${shutterstockApiBase()}/images/licenses/${encodeURIComponent(licenseId)}/downloads`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(body),

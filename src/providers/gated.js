@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { fetchJson } from "../lib/http.js";
+import { shutterstockApiBase } from "../services/shutterstock.js";
 
 export const shutterstockProvider = {
   id: "shutterstock", name: "Shutterstock", status: "image_license_ready",
@@ -7,7 +8,7 @@ export const shutterstockProvider = {
   isConfigured: () => Boolean(config.credentials.shutterstock.accessToken),
   async search(brief, limit) {
     if (!this.isConfigured()) throw new Error("Shutterstock access token is not configured");
-    const url = new URL("https://api.shutterstock.com/v2/images/search");
+    const url = new URL(`${shutterstockApiBase()}/images/search`);
     url.searchParams.set("query", brief.query);
     url.searchParams.set("per_page", String(limit));
     url.searchParams.set("view", "full");

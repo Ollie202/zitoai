@@ -100,6 +100,37 @@ Run date: 2026-07-18
 
 This is the first confirmed end-to-end natural-language ASP smoke test for all three provider lanes.
 
+## Shutterstock sanity check
+
+Run date: 2026-07-18
+
+Docs checked:
+
+- `https://www.shutterstock.com/developers/documentation`
+- `https://www.shutterstock.com/developers/documentation/authentication`
+- `https://www.shutterstock.com/developers/documentation/licensing-and-downloading`
+
+Verified against docs:
+
+- Every Shutterstock API call sends a `User-Agent`.
+- Search returns image candidates through the configured Shutterstock API base.
+- Categories endpoint returns data.
+- Subscriptions endpoint returns data.
+- The license request builder includes `image_id`, `subscription_id`, `size`, `format`, `price`, and `metadata.customer_id` where applicable.
+- The service auto-selects an active image subscription/format when the caller does not provide `subscriptionId`.
+- The real license endpoint refuses mutation unless `confirmLicense=true`.
+- Redownload support is implemented through the license-download endpoint, but actual redownload depends on the subscription/license type.
+
+Live read-only check:
+
+- `GET /api/providers/shutterstock/status` returned `200`.
+- `GET /api/providers/shutterstock/categories` returned `200` with category data.
+- `GET /api/providers/shutterstock/subscriptions` returned `200` with one subscription record.
+- `POST /api/a2mcp/media-search` for an image brief returned Shutterstock results with preview, license reference, purchase/source link, and `/api/providers/shutterstock/license` as the next license endpoint.
+- `POST /api/providers/shutterstock/license` without `confirmLicense=true` safely returned `400` and did not create a license.
+
+Current honest status: Shutterstock search, metadata, subscription discovery, guarded license execution, and redownload plumbing are implemented. Actual license execution still requires a deliberate `confirmLicense=true` request using the current OAuth token and an eligible API subscription.
+
 ## What still needs real user/provider action
 
 - Freesound live OAuth approval still requires the user to connect an actual Freesound account.

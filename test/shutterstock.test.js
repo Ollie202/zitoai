@@ -79,6 +79,42 @@ test("Shutterstock licensing auto-selects an active image subscription and recor
   }
 });
 
+test("Shutterstock search respects the configured API base", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousToken = config.credentials.shutterstock.accessToken;
+  const previousBase = config.credentials.shutterstock.apiBase;
+  let requestedUrl = null;
+
+  config.credentials.shutterstock.accessToken = "test-token";
+  config.credentials.shutterstock.apiBase = "https://api-sandbox.shutterstock.com/v2";
+  const { shutterstockProvider } = await import("../src/providers/gated.js");
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return jsonResponse({
+      data: [
+        {
+          id: "59656357",
+          description: "Sandbox image",
+          assets: { preview_1500: { url: "https://preview.example/image.jpg" } },
+          categories: [],
+          keywords: [],
+        },
+      ],
+    });
+  };
+
+  try {
+    const results = await shutterstockProvider.search({ query: "sandbox image", assetType: "image" }, 1);
+    assert.equal(requestedUrl.startsWith("https://api-sandbox.shutterstock.com/v2/images/search?"), true);
+    assert.equal(results[0].provider, "shutterstock");
+    assert.equal(results[0].previewUrl, "https://preview.example/image.jpg");
+  } finally {
+    globalThis.fetch = previousFetch;
+    config.credentials.shutterstock.accessToken = previousToken;
+    config.credentials.shutterstock.apiBase = previousBase;
+  }
+});
+
 test("Shutterstock redownload posts to the license download endpoint", async () => {
   const previousFetch = globalThis.fetch;
   const previousToken = config.credentials.shutterstock.accessToken;
