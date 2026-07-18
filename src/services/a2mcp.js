@@ -9,6 +9,7 @@ export function buildA2McpManifest() {
     name: "ZitoAI",
     role: "ASP",
     serviceType: "A2MCP",
+    mode: "standardized_api_service",
     description: "Deterministic rights-aware media procurement API for images, sound effects, ambience, one-shots, and music tracks.",
     baseUrl,
     websiteUrl: config.publicBaseUrl.replace(/\/+$/, ""),
@@ -16,6 +17,7 @@ export function buildA2McpManifest() {
       type: "free",
       paymentRequired: false,
       x402: false,
+      settlement: "instant_per_call_free",
       note: "Hackathon endpoints are free deterministic A2MCP-style APIs. Paid x402 can be added after marketplace approval.",
     },
     services: [
@@ -26,6 +28,9 @@ export function buildA2McpManifest() {
         endpoint: `${baseUrl}/api/a2mcp/media-search`,
         price: "0",
         pricingType: "free",
+        serviceMode: "A2MCP",
+        settlement: "instant_per_call_free",
+        paymentRequired: false,
         description: "Takes a media brief and returns normalized provider candidates with preview URLs, license metadata, and the next licensing step.",
         inputSchema: {
           type: "object",
@@ -47,6 +52,9 @@ export function buildA2McpManifest() {
         endpoint: `${baseUrl}/api/a2mcp/evidence-manifest`,
         price: "0",
         pricingType: "free",
+        serviceMode: "A2MCP",
+        settlement: "instant_per_call_free",
+        paymentRequired: false,
         description: "Builds a JSON evidence manifest from a selected provider asset and real purchase/license evidence supplied by the caller.",
         inputSchema: {
           type: "object",

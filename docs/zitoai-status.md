@@ -317,7 +317,16 @@ Current honest status: Freesound search, previews, metadata, license/reference e
 
 ## OKX.AI registration stance
 
-ZitoAI should be listed as an ASP with A2MCP services. The service contract is intentionally free for now and returns the result directly, which matches the OKX.AI free-endpoint model.
+ZitoAI should be listed as an ASP with A2MCP services. It is not an A2A negotiation worker. The current service contract is intentionally free for now and returns the result directly through standardized API endpoints.
+
+Alignment with the OKX.AI docs checked on 2026-07-18:
+
+- OKX.AI supports three roles: User, ASP, and Evaluator. ZitoAI is an ASP.
+- ASPs can register A2A, A2MCP, or both. ZitoAI is currently A2MCP only.
+- A2MCP is for standardized MCP/API services. ZitoAI exposes `POST /api/a2mcp/media-search` and `POST /api/a2mcp/evidence-manifest` as standardized API services.
+- A2MCP services are expected to run automatically after registration and launch. ZitoAI’s endpoints are machine-callable and do not require manual negotiation.
+- OKX.AI A2MCP settlement is normally instant per call through OKX Payment SDK. ZitoAI currently advertises `paymentRequired=false` and `pricingType=free`; paid settlement/x402 is intentionally left for the payment phase.
+- Because ZitoAI is A2MCP/free right now, there is no arbitration flow in the current service contract. Provider purchase/licensing gates remain inside ZitoAI’s provider-specific workflow and evidence pack.
 
 ## Working rule for edits
 
