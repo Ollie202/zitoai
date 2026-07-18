@@ -23,6 +23,7 @@ ZitoAI is now built as an OKX.AI ASP service with an A2MCP-style API surface.
 - Keep procurement history and evidence in Supabase when configured.
 - Support provider account connections through OAuth where available.
 - Expose a public ASP/A2MCP manifest for OKX.AI marketplace use.
+- Use OpenRouter for guarded brief parsing and post-filter result ranking, while keeping licensing decisions in the deterministic provider/policy layer.
 
 ## Verified endpoints
 
@@ -99,6 +100,44 @@ Run date: 2026-07-18
   - a purchase / source / checkout link
 
 This is the first confirmed end-to-end natural-language ASP smoke test for all three provider lanes.
+
+## OpenRouter Phase 3 sanity check
+
+Run date: 2026-07-18
+
+Docs checked:
+
+- `https://openrouter.ai/docs/quickstart`
+- `https://openrouter.ai/docs/features/structured-outputs`
+- `https://openrouter.ai/docs/features/app-attribution`
+
+Verified against docs and local behavior:
+
+- ZitoAI calls OpenRouter through `https://openrouter.ai/api/v1/chat/completions`.
+- Requests send `Authorization: Bearer ...`, `HTTP-Referer`, `X-OpenRouter-Title`, and JSON content headers.
+- Structured output uses `response_format.type=json_schema` with `strict=true`.
+- `parse_brief` uses `google/gemini-2.5-flash-lite` with `temperature=0`.
+- `rank_results` uses `openai/gpt-4o-mini` with `temperature=0`.
+- The LLM does not decide licensing eligibility; source routing, provider filtering, provider policy, and licensing gates remain deterministic.
+- `parse_brief` validates the model output enum values before using them and falls back to local parsing on failure.
+- `rank_results` validates every returned `asset_id/source` pair against the candidate list before reordering; invalid rankings fall back to the original deterministic order.
+- Guardrails are active:
+  - default cumulative spend cap: `$5`
+  - default per-minute call cap: `20`
+  - default input-size cap: `12000` characters
+  - every OpenRouter call logs function name, model, token usage, token cost, success/failure, and fallback reason where applicable
+  - current runtime spend/guardrail status is exposed through `GET /api/health` under `brain.guardrails`
+
+Local checks:
+
+- `npm test` passed `26/26`.
+- A direct live OpenRouter structured-output smoke test passed for both calls:
+  - `parse_brief` returned `music` using `google/gemini-2.5-flash-lite`
+  - `rank_results` returned a valid candidate ranking using `openai/gpt-4o-mini`
+  - combined test cost was about `$0.0001291`
+- A real `searchAssets` smoke test still routed a sound-effect/ambience prompt to Freesound and returned a preview URL.
+
+Current honest status: OpenRouter is now additive in the intended places only. It improves brief parsing and result ordering, but does not replace deterministic provider routing, license filtering, purchase gates, or policy review.
 
 ## Shutterstock sanity check
 

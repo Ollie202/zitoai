@@ -11,11 +11,14 @@ export const config = {
   openRouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",
     fastModel:
-      process.env.OPENROUTER_FAST_MODEL || "openai/gpt-4o-mini",
+      process.env.OPENROUTER_FAST_MODEL || "google/gemini-2.5-flash-lite",
     smartModel:
-      process.env.OPENROUTER_SMART_MODEL || "google/gemini-2.5-flash",
+      process.env.OPENROUTER_SMART_MODEL || "openai/gpt-4o-mini",
     siteUrl: process.env.OPENROUTER_SITE_URL || process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
     appName: process.env.OPENROUTER_APP_NAME || "ZitoAI",
+    maxSpendUsd: Number(process.env.OPENROUTER_MAX_SPEND_USD || 5),
+    maxCallsPerMinute: Number(process.env.OPENROUTER_MAX_CALLS_PER_MINUTE || 20),
+    maxInputChars: Number(process.env.OPENROUTER_MAX_INPUT_CHARS || 12000),
   },
   supabase: {
     url: process.env.SUPABASE_URL || "",

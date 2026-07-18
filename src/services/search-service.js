@@ -1,7 +1,7 @@
 import { evaluateAsset } from "../core/policy-engine.js";
 import { rankProviders } from "../core/provider-routing.js";
 import { allSearchProviders } from "../providers/index.js";
-import { normalizeBrief } from "./openrouter.js";
+import { normalizeBrief, rankResultsWithOpenRouter } from "./openrouter.js";
 
 export async function searchAssets(input) {
   input = input && typeof input === "object" && !Array.isArray(input) ? input : {};
@@ -60,13 +60,16 @@ export async function searchAssets(input) {
     }
   }
 
+  const locallyRankedResults = rank(results);
+  const aiRanking = await rankResultsWithOpenRouter(brief, locallyRankedResults);
+
   return {
     brief,
-    brain,
+    brain: { ...brain, ranking: aiRanking.ranking },
     recommendedProvider: providerStatus.find((provider) => provider.ok)?.id || null,
     providers: providerStatus,
-    count: results.length,
-    results: rank(results),
+    count: aiRanking.results.length,
+    results: aiRanking.results,
     generatedAt: new Date().toISOString(),
     disclaimer:
       "ZitoAI provides procurement evidence and policy screening, not legal advice or a replacement for the provider's license.",
