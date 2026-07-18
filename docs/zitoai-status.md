@@ -133,6 +133,44 @@ Current honest status: Shutterstock search, metadata, subscription discovery, gu
 
 Practical note for the demo: a free Shutterstock API subscription can work for API use, but it is separate from the Shutterstock website subscription. If the account is operating in a testing/comp-license mode, the API may return a dummy license that does not grant real usage rights.
 
+## Jamendo sanity check
+
+Run date: 2026-07-18
+
+Docs checked:
+
+- `https://support-licensing.jamendo.com/individual-licenses`
+- `https://support-licensing.jamendo.com/after-purchase-catalog-licenses`
+- `https://developer.jamendo.com/v3.0/tracks`
+- `https://developer.jamendo.com/v3.0/authentication`
+
+Verified against docs:
+
+- Jamendo’s public API is read/catalog oriented and requires a `client_id` on every call.
+- The default Jamendo API application plan is `read only`; `read & write` requires Jamendo approval and is only for OAuth-protected write/private methods.
+- The tracks API supports search and metadata discovery, including fields such as `musicinfo`, `licenses`, `prourl`, `audiodownload`, `audiodownload_allowed`, `content_id_free`, `audioformat`, `audiodlformat`, and `tags`.
+- `prolicensing` and `content_id_free` filters are valid ways to steer toward commercially usable / Content ID safe candidates.
+- Jamendo’s individual license workflow is an external checkout flow, not a purchase API inside ZitoAI.
+- After purchase, Jamendo requires the user to add a project and generate a License Certificate on the Jamendo Licensing site.
+- Jamendo licenses are one-project, one-track sync licenses; the user must keep the invoice / certificate evidence.
+- Credits should be recorded in the format: `Artist — Track — Provided by Jamendo`.
+
+Live check:
+
+- `GET /api/providers/jamendo/status` returned `200`.
+- Status shows `configured=true`, `apiBase=https://api.jamendo.com/v3.0`, and `mode=read_only_catalog`.
+- 10/10 natural-language Jamendo ASP prompts returned:
+  - recommended provider: `jamendo`
+  - inferred scope: `music`
+  - preview URL
+  - source URL
+  - purchase / licensing handoff URL
+  - license reference or CC URL
+  - policy verdict: `review`
+  - `checkoutRequired=true`
+
+Current honest status: Jamendo search, previews, metadata, licensing handoff URLs, and evidence capture are implemented. ZitoAI does not buy Jamendo licenses through the public API; the actual checkout and License Certificate generation still happen on Jamendo’s licensing site unless a separate Jamendo commercial agreement is arranged.
+
 ## Freesound sanity check
 
 Run date: 2026-07-18
