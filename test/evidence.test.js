@@ -51,4 +51,42 @@ test("Jamendo evidence manifest records external checkout and certificate workfl
   assert.equal(manifest.providerWorkflow.checkoutUrl, "https://licensing.jamendo.com/track/123");
   assert.match(manifest.providerWorkflow.requiredProof, /License Certificate/);
   assert.match(manifest.providerWorkflow.summary, /public API returned catalog\/licensing metadata only/);
+  assert.match(manifest.providerWorkflow.evidenceStatus, /License certificate pending/);
+  assert.ok(manifest.providerWorkflow.expectedProjectDetails.length >= 4);
+});
+
+test("Jamendo evidence manifest distinguishes recorded external purchase evidence", () => {
+  const manifest = buildEvidenceManifest({
+    brief: { query: "upbeat advert music", assetType: "music", intendedUse: "commercial_content", commercial: true, territory: "worldwide" },
+    asset: {
+      id: "123",
+      provider: "jamendo",
+      title: "Bright Campaign Track",
+      creator: "Jam Artist",
+      sourceUrl: "https://www.jamendo.com/track/123",
+      purchaseUrl: "https://licensing.jamendo.com/track/123",
+      assetType: "music",
+      license: { code: "jamendo-license", name: "Jamendo commercial licensing available", url: "https://licensing.jamendo.com/track/123", attributionRequired: true },
+      policy: { verdict: "review", summary: "Jamendo commercial clearance is a handoff.", checkoutRequired: true, rawDeliveryAllowed: false },
+      metadata: {
+        jamendoLicense: {
+          mode: "checkout_handoff_certificate_required",
+          checkoutUrl: "https://licensing.jamendo.com/track/123",
+          projectDetailsExpected: ["project title", "project type", "licensee/client name", "usage/channel"],
+        },
+      },
+    },
+    purchase: {
+      provider: "jamendo",
+      status: "external_purchase_recorded",
+      providerOrderId: "JAM-123",
+      receiptNumber: "CERT-456",
+      amount: 19.99,
+      currency: "USD",
+      purchasedAt: "2026-07-16T09:00:00.000Z",
+    },
+  });
+
+  assert.match(manifest.providerWorkflow.summary, /external Jamendo checkout or agreement/);
+  assert.match(manifest.providerWorkflow.evidenceStatus, /External Jamendo purchase evidence recorded/);
 });

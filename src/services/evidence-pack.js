@@ -62,13 +62,20 @@ export async function buildEvidencePdf(manifest) {
   ]);
   if (manifest.providerWorkflow?.summary) {
     section(doc, "Provider workflow", [
+      ["Workflow mode", manifest.providerWorkflow.mode],
       ["Summary", manifest.providerWorkflow.summary],
       ["Checkout URL", manifest.providerWorkflow.checkoutUrl],
       ["Required proof", manifest.providerWorkflow.requiredProof],
+      ["Evidence status", manifest.providerWorkflow.evidenceStatus],
     ]);
     if (manifest.providerWorkflow.steps?.length) {
       heading(doc, "Provider steps");
       for (const step of manifest.providerWorkflow.steps) doc.fillColor("#505b6d").font("Helvetica").fontSize(9).text(`• ${step}`, { indent: 8, paragraphGap: 4 });
+      doc.moveDown(.6);
+    }
+    if (manifest.providerWorkflow.expectedProjectDetails?.length) {
+      heading(doc, "Project details expected by provider");
+      for (const detail of manifest.providerWorkflow.expectedProjectDetails) doc.fillColor("#505b6d").font("Helvetica").fontSize(9).text(`• ${detail}`, { indent: 8, paragraphGap: 4 });
       doc.moveDown(.6);
     }
   }
@@ -131,21 +138,34 @@ function canonical(value) {
 function providerWorkflow(asset, purchase) {
   if (asset.provider !== "jamendo") return null;
   const jamendoLicense = asset.metadata?.jamendoLicense || {};
+  const externalPurchaseRecorded = purchase.status === "external_purchase_recorded";
   return {
     provider: "jamendo",
     mode: jamendoLicense.mode || "checkout_handoff_certificate_required",
-    summary: purchase.status === "external_purchase_recorded"
-      ? "Jamendo purchase evidence was recorded from an external Jamendo checkout."
-      : "Jamendo public API returned catalog/licensing metadata only. Commercial licensing must be completed through Jamendo checkout or a separate Jamendo agreement.",
+    summary: externalPurchaseRecorded
+      ? "Jamendo purchase evidence was recorded from an external Jamendo checkout or agreement. Verify the invoice and License Certificate before relying on this pack."
+      : "Jamendo public API returned catalog/licensing metadata only. This is a checkout handoff, not a completed license. Commercial licensing must be completed through Jamendo checkout or a separate Jamendo agreement.",
     checkoutUrl: jamendoLicense.checkoutUrl || asset.purchaseUrl || asset.sourceUrl || null,
-    requiredProof: "Jamendo invoice number, License Certificate, purchase date, and project/licensee details.",
+    requiredProof: "Jamendo invoice/order reference, License Certificate, purchase date, licensee/client name, project title/type, usage/channel, selected track ID, and any restrictions shown by Jamendo.",
+    evidenceStatus: externalPurchaseRecorded
+      ? "External Jamendo purchase evidence recorded by user; ZitoAI did not independently execute the checkout."
+      : "License certificate pending; do not treat this asset as commercially cleared yet.",
     steps: jamendoLicense.requiredExternalSteps || [
       "Complete Jamendo Licensing checkout for the selected track.",
-      "Add the project details after purchase inside Jamendo.",
-      "Generate and keep the Jamendo License Certificate.",
-      "Record the invoice/certificate reference in ZitoAI.",
+      "Add the project title, project type, licensee/client, usage/channel, and territory details inside Jamendo if requested.",
+      "Generate and keep the Jamendo License Certificate after purchase.",
+      "Record the invoice/order reference and certificate reference in ZitoAI.",
+      "Attach or archive the Jamendo certificate outside this evidence pack if the final demo/client handoff requires the original document.",
     ],
-    expectedProjectDetails: jamendoLicense.projectDetailsExpected || [],
+    expectedProjectDetails: jamendoLicense.projectDetailsExpected || [
+      "Project title",
+      "Project type",
+      "Licensee/client name",
+      "Usage/channel such as YouTube, paid ad, app, game, film, podcast, or social campaign",
+      "Territory",
+      "Purchase invoice/order reference",
+      "Jamendo License Certificate reference",
+    ],
   };
 }
 
