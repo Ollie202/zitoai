@@ -12,6 +12,7 @@ test("A2MCP manifest exposes ZitoAI as a free ASP service provider", () => {
   assert.equal(manifest.services.length, 2);
   assert.equal(manifest.services[0].id, "rights-media-search");
   assert.equal(manifest.services[0].endpoint.endsWith("/api/a2mcp/media-search"), true);
+  assert.deepEqual(manifest.services[0].inputSchema.required, ["query"]);
   assert.deepEqual(manifest.providers, {
     image: "Shutterstock",
     sound_effect: "Freesound",

@@ -29,10 +29,10 @@ export function buildA2McpManifest() {
         description: "Takes a media brief and returns normalized provider candidates with preview URLs, license metadata, and the next licensing step.",
         inputSchema: {
           type: "object",
-          required: ["query", "assetType"],
+          required: ["query"],
           properties: {
             query: { type: "string", description: "Plain-language media request." },
-            assetType: { type: "string", enum: ["image", "sound_effect", "music"], description: "Target media type." },
+            assetType: { type: "string", enum: ["image", "sound_effect", "music"], description: "Optional target media type. If omitted, ZitoAI infers the scope from the natural-language request." },
             intendedUse: { type: "string", description: "Commercial, personal, broadcast, app/game, etc." },
             territory: { type: "string", default: "worldwide" },
             budgetUsd: { type: "number" },
