@@ -131,6 +131,8 @@ Live read-only check:
 
 Current honest status: Shutterstock search, metadata, subscription discovery, guarded license execution, and redownload plumbing are implemented. Actual license execution still requires a deliberate `confirmLicense=true` request using the current OAuth token and an eligible API subscription.
 
+Practical note for the demo: a free Shutterstock API subscription can work for API use, but it is separate from the Shutterstock website subscription. If the account is operating in a testing/comp-license mode, the API may return a dummy license that does not grant real usage rights.
+
 ## What still needs real user/provider action
 
 - Freesound live OAuth approval still requires the user to connect an actual Freesound account.
