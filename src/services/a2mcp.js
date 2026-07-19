@@ -50,7 +50,7 @@ export function buildA2McpManifest() {
     },
     safety: {
       legalAdvice: false,
-      paymentRequiresUserConfirmation: true,
+      paymentRequiresUserConfirmation: false,
       noFabricatedPurchases: true,
       providerLicenseControlsRights: true,
     },

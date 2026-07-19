@@ -20,6 +20,7 @@ test("A2MCP manifest exposes ZitoAI as a free ASP service provider", () => {
   assert.equal(manifest.services[0].settlement, "none");
   assert.equal(manifest.services[0].pricingType, "free");
   assert.equal(manifest.services[0].price, "free");
+  assert.equal(manifest.safety.paymentRequiresUserConfirmation, false);
   assert.deepEqual(manifest.services[0].inputSchema.required, ["query"]);
   assert.deepEqual(manifest.providers, {
     image: "Shutterstock",
