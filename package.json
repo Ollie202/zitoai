@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "src/server.js",
   "description": "ZitoAI rights-aware media procurement and evidence agent for OKX.AI",
   "scripts": {
     "start": "node src/server.js",
