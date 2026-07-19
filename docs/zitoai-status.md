@@ -311,9 +311,31 @@ Current honest status: Freesound search, previews, metadata, license/reference e
    - Run one music-track demo through Jamendo handoff.
    - Generate an evidence pack for the strongest demo asset.
 
-10. Payment phase, later
-   - Add OKX Agent Payments Protocol / x402 only after the free ASP behavior is stable.
-   - Re-test paid endpoint behavior separately so payment bugs do not get confused with provider API bugs.
+10. Payment phase
+   - OKX Agent Payments Protocol / x402 is wired behind `OKX_PAYMENT_ENABLED`.
+   - Re-test paid endpoint behavior separately after the Railway payment variables are set.
+
+## OKX Payment SDK / x402 install status
+
+Checked against the official OKX Onchain OS Payment docs on 2026-07-19.
+
+Installed Node SDK packages:
+
+- `@okxweb3/x402-express`
+- `@okxweb3/x402-core`
+- `@okxweb3/x402-evm`
+- `express`
+
+Current honest status:
+
+- The SDK is installed in `package.json` / `package-lock.json`.
+- The A2MCP `POST /api/a2mcp/media-search` route is the pay-per-call route.
+- Default listing/runtime price is `$0.02` via `OKX_PAYMENT_PRICE_USD`.
+- Payment remains off unless `OKX_PAYMENT_ENABLED=true`.
+- When enabled, the same endpoint first returns a standard x402 `402 Payment Required` challenge, then returns the normal media-search result after paid replay.
+- Existing tests pass after wiring.
+- The remaining payment setup is operational, not code: set `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, `PAY_TO_ADDRESS`, and `OKX_PAYMENT_ENABLED=true` in Railway.
+- Production listing should use X Layer mainnet (`eip155:196`). Use testnet only for separate non-marketplace testing.
 
 ## OKX.AI registration stance
 
@@ -325,7 +347,7 @@ Alignment with the OKX.AI docs checked on 2026-07-18:
 - ASPs can register A2A, A2MCP, or both. ZitoAI is currently A2MCP only.
 - A2MCP is for standardized MCP/API services. ZitoAI exposes `POST /api/a2mcp/media-search` and `POST /api/a2mcp/evidence-manifest` as standardized API services.
 - A2MCP services are expected to run automatically after registration and launch. ZitoAI’s endpoints are machine-callable and do not require manual negotiation.
-- OKX.AI A2MCP settlement is normally instant per call through OKX Payment SDK. ZitoAI currently advertises `paymentRequired=false` and `pricingType=free`; paid settlement/x402 is intentionally left for the payment phase.
+- OKX.AI A2MCP settlement is normally instant per call through OKX Payment SDK. ZitoAI can now advertise `paymentRequired=true` and `pricingType=pay_per_call` when `OKX_PAYMENT_ENABLED=true`; it remains free when that switch is off.
 - Because ZitoAI is A2MCP/free right now, there is no arbitration flow in the current service contract. Provider purchase/licensing gates remain inside ZitoAI’s provider-specific workflow and evidence pack.
 
 ## Working rule for edits

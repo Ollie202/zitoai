@@ -8,6 +8,17 @@ export const config = {
   port: Number(process.env.PORT || 3000),
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
   aspBaseUrl: process.env.ASP_BASE_URL || process.env.PUBLIC_BASE_URL || "https://asp.zitoai.xyz",
+  payment: {
+    enabled: parseBoolean(process.env.OKX_PAYMENT_ENABLED),
+    apiKey: process.env.OKX_API_KEY || "",
+    secretKey: process.env.OKX_SECRET_KEY || "",
+    passphrase: process.env.OKX_PASSPHRASE || "",
+    payToAddress: process.env.PAY_TO_ADDRESS || "",
+    baseUrl: process.env.OKX_BASE_URL || "https://web3.okx.com",
+    network: process.env.OKX_PAYMENT_NETWORK || "eip155:196",
+    priceUsd: process.env.OKX_PAYMENT_PRICE_USD || "$0.02",
+    syncSettle: parseBoolean(process.env.OKX_PAYMENT_SYNC_SETTLE),
+  },
   openRouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",
     fastModel:
@@ -74,4 +85,8 @@ function parseOptionalNumber(value) {
   if (value == null || String(value).trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseBoolean(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }

@@ -1,9 +1,11 @@
 import { config } from "../config.js";
+import { a2mcpBilling } from "./x402-payment.js";
 
 export const A2MCP_PROTOCOL_VERSION = "okx.ai.a2mcp.v1";
 
 export function buildA2McpManifest() {
   const baseUrl = config.aspBaseUrl.replace(/\/+$/, "");
+  const billing = a2mcpBilling();
   return {
     protocol: A2MCP_PROTOCOL_VERSION,
     name: "ZitoAI",
@@ -13,24 +15,20 @@ export function buildA2McpManifest() {
     description: "Deterministic rights-aware media procurement API for images, sound effects, ambience, one-shots, and music tracks.",
     baseUrl,
     websiteUrl: config.publicBaseUrl.replace(/\/+$/, ""),
-    billing: {
-      type: "free",
-      paymentRequired: false,
-      x402: false,
-      settlement: "instant_per_call_free",
-      note: "Hackathon endpoints are free deterministic A2MCP-style APIs. Paid x402 can be added after marketplace approval.",
-    },
+    billing,
     services: [
       {
         id: "rights-media-search",
         name: "Rights-aware media search",
         method: "POST",
         endpoint: `${baseUrl}/api/a2mcp/media-search`,
-        price: "0",
-        pricingType: "free",
+        price: billing.price,
+        pricingType: billing.pricingType,
         serviceMode: "A2MCP",
-        settlement: "instant_per_call_free",
-        paymentRequired: false,
+        settlement: billing.settlement,
+        paymentRequired: billing.paymentRequired,
+        x402: billing.x402,
+        network: billing.network,
         description: "Takes a media brief and returns normalized provider candidates with preview URLs, license metadata, and the next licensing step.",
         inputSchema: {
           type: "object",
@@ -87,7 +85,7 @@ export function wrapA2McpResult(serviceId, result) {
     protocol: A2MCP_PROTOCOL_VERSION,
     asp: "ZitoAI",
     serviceId,
-    billing: { type: "free", paymentRequired: false, x402: false },
+    billing: a2mcpBilling(),
     result,
   };
 }

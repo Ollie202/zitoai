@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
+import { paymentStatus, processX402Request, settleX402Payment } from "./services/x402-payment.js";
 import { brainStatus, normalizeBrief } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
@@ -51,7 +52,7 @@ const agentCard = {
   protocol: "A2MCP",
   capabilities: { streaming: false, pushNotifications: false, a2mcp: true },
   services: [
-    { id: "rights-media-search", name: "Rights-aware media search", endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`, price: "Free during hackathon", paymentRequired: false },
+    { id: "rights-media-search", name: "Rights-aware media search", endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`, price: paymentStatus().enabled ? config.payment.priceUsd : "Free during hackathon", paymentRequired: paymentStatus().enabled, x402: paymentStatus().enabled },
     { id: "license-evidence-manifest", name: "License Evidence Manifest", endpoint: `${config.aspBaseUrl}/api/a2mcp/evidence-manifest`, price: "Free during hackathon", paymentRequired: false },
   ],
   safety: { paymentRequiresUserConfirmation: true, legalAdvice: false },
@@ -69,6 +70,7 @@ const server = createServer(async (request, response) => {
         brain: brainStatus(),
         storage: storageStatus(),
         oauth: oauthStatus(),
+        payment: paymentStatus(),
       });
     }
     if (request.method === "GET" && url.pathname === "/api/config") {
@@ -139,7 +141,16 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", role: "ASP", protocol: "A2MCP", paymentRequired: false });
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/media-search") {
-      return json(response, 200, wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request))));
+      const payment = await processX402Request(request, url);
+      if (payment.type === "payment-error") return instruction(response, payment.response);
+      const body = wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request)));
+      const serialized = Buffer.from(JSON.stringify(body));
+      if (payment.type === "payment-verified") {
+        const settlement = await settleX402Payment(payment, request, url, serialized, { "Content-Type": "application/json; charset=utf-8" });
+        if (!settlement.success) return instruction(response, settlement.response);
+        return json(response, 200, body, settlement.headers);
+      }
+      return json(response, 200, body);
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/evidence-manifest") {
       return json(response, 200, wrapA2McpResult("license-evidence-manifest", buildEvidenceManifest(await readJson(request))));
@@ -202,12 +213,21 @@ server.listen(config.port, () => {
   console.log(`OpenRouter: ${brainStatus().configured ? "configured" : "local fallback"}`);
 });
 
-function json(response, status, body) {
+function json(response, status, body, extraHeaders = {}) {
   response.writeHead(status, securityHeaders({
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...extraHeaders,
   }));
   response.end(JSON.stringify(body));
+}
+
+function instruction(response, instruction) {
+  const headers = instruction.headers || {};
+  const contentType = headers["Content-Type"] || headers["content-type"] || "application/json; charset=utf-8";
+  response.writeHead(instruction.status || 402, securityHeaders({ ...headers, "Content-Type": contentType, "Cache-Control": "no-store" }));
+  if (instruction.isHtml) return response.end(String(instruction.body || ""));
+  response.end(JSON.stringify(instruction.body || {}));
 }
 
 function binary(response, status, body, contentType, fileName, hash) {
