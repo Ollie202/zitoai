@@ -9,7 +9,6 @@ export const config = {
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
   aspBaseUrl: process.env.ASP_BASE_URL || process.env.PUBLIC_BASE_URL || "https://asp.zitoai.xyz",
   payment: {
-    enabled: parseBoolean(process.env.OKX_PAYMENT_ENABLED),
     apiKey: process.env.OKX_API_KEY || "",
     secretKey: process.env.OKX_SECRET_KEY || "",
     passphrase: process.env.OKX_PASSPHRASE || "",

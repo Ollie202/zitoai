@@ -52,8 +52,7 @@ const agentCard = {
   protocol: "A2MCP",
   capabilities: { streaming: false, pushNotifications: false, a2mcp: true },
   services: [
-    { id: "rights-media-search", name: "Rights-aware media search", endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`, price: paymentStatus().enabled ? config.payment.priceUsd : "Free during hackathon", paymentRequired: paymentStatus().enabled, x402: paymentStatus().enabled },
-    { id: "license-evidence-manifest", name: "License Evidence Manifest", endpoint: `${config.aspBaseUrl}/api/a2mcp/evidence-manifest`, price: "Free during hackathon", paymentRequired: false },
+    { id: "rights-media-search", name: "Rights-aware media search", endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`, price: config.payment.priceUsd, paymentRequired: true, x402: true },
   ],
   safety: { paymentRequiresUserConfirmation: true, legalAdvice: false },
 };
@@ -145,12 +144,9 @@ const server = createServer(async (request, response) => {
       if (payment.type === "payment-error") return instruction(response, payment.response);
       const body = wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request)));
       const serialized = Buffer.from(JSON.stringify(body));
-      if (payment.type === "payment-verified") {
-        const settlement = await settleX402Payment(payment, request, url, serialized, { "Content-Type": "application/json; charset=utf-8" });
-        if (!settlement.success) return instruction(response, settlement.response);
-        return json(response, 200, body, settlement.headers);
-      }
-      return json(response, 200, body);
+      const settlement = await settleX402Payment(payment, request, url, serialized, { "Content-Type": "application/json; charset=utf-8" });
+      if (!settlement.success) return instruction(response, settlement.response);
+      return json(response, 200, body, settlement.headers);
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/evidence-manifest") {
       return json(response, 200, wrapA2McpResult("license-evidence-manifest", buildEvidenceManifest(await readJson(request))));

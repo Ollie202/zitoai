@@ -36,9 +36,8 @@ let httpServerPromise;
 
 export function paymentStatus() {
   return {
-    enabled: Boolean(config.payment.enabled),
     configured: Boolean(config.payment.apiKey && config.payment.secretKey && config.payment.passphrase && config.payment.payToAddress),
-    mode: config.payment.enabled ? "x402_pay_per_call" : "free",
+    mode: "x402_pay_per_call",
     price: config.payment.priceUsd,
     network: config.payment.network,
     payToConfigured: Boolean(config.payment.payToAddress),
@@ -49,17 +48,6 @@ export function paymentStatus() {
 
 export function a2mcpBilling() {
   const status = paymentStatus();
-  if (!status.enabled) {
-    return {
-      type: "free",
-      paymentRequired: false,
-      x402: false,
-      settlement: "instant_per_call_free",
-      price: "0",
-      pricingType: "free",
-      note: "Free mode is active. Set OKX_PAYMENT_ENABLED=true with OKX facilitator credentials and PAY_TO_ADDRESS to require x402 per call.",
-    };
-  }
   return {
     type: "paid",
     paymentRequired: true,
@@ -74,7 +62,6 @@ export function a2mcpBilling() {
 }
 
 export async function processX402Request(request, url) {
-  if (!config.payment.enabled) return { type: "no-payment-required" };
   if (!paymentStatus().configured) {
     return {
       type: "payment-error",

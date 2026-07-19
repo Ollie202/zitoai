@@ -43,27 +43,6 @@ export function buildA2McpManifest() {
           },
         },
       },
-      {
-        id: "license-evidence-manifest",
-        name: "License evidence manifest",
-        method: "POST",
-        endpoint: `${baseUrl}/api/a2mcp/evidence-manifest`,
-        price: "0",
-        pricingType: "free",
-        serviceMode: "A2MCP",
-        settlement: "instant_per_call_free",
-        paymentRequired: false,
-        description: "Builds a JSON evidence manifest from a selected provider asset and real purchase/license evidence supplied by the caller.",
-        inputSchema: {
-          type: "object",
-          required: ["brief", "asset"],
-          properties: {
-            brief: { type: "object" },
-            asset: { type: "object" },
-            purchase: { type: "object" },
-          },
-        },
-      },
     ],
     providers: {
       image: "Shutterstock",
