@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
-import { paymentStatus, processX402Request, settleX402Payment } from "./services/x402-payment.js";
+import { paymentStatus } from "./services/x402-payment.js";
 import { brainStatus, normalizeBrief } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
@@ -52,9 +52,9 @@ const agentCard = {
   protocol: "A2MCP",
   capabilities: { streaming: false, pushNotifications: false, a2mcp: true },
   services: [
-    { id: "rights-media-search", name: "Rights-aware media search", endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`, price: config.payment.priceUsd, paymentRequired: true, x402: true },
+    { id: "rights-media-search", name: "Rights-aware media search", endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`, price: "free", paymentRequired: false, x402: false },
   ],
-  safety: { paymentRequiresUserConfirmation: true, legalAdvice: false },
+  safety: { paymentRequiresUserConfirmation: false, legalAdvice: false },
 };
 
 const server = createServer(async (request, response) => {
@@ -140,13 +140,8 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", role: "ASP", protocol: "A2MCP", paymentRequired: false });
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/media-search") {
-      const payment = await processX402Request(request, url);
-      if (payment.type === "payment-error") return instruction(response, payment.response);
       const body = wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request)));
-      const serialized = Buffer.from(JSON.stringify(body));
-      const settlement = await settleX402Payment(payment, request, url, serialized, { "Content-Type": "application/json; charset=utf-8" });
-      if (!settlement.success) return instruction(response, settlement.response);
-      return json(response, 200, body, settlement.headers);
+      return json(response, 200, body);
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/evidence-manifest") {
       return json(response, 200, wrapA2McpResult("license-evidence-manifest", buildEvidenceManifest(await readJson(request))));

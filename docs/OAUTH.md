@@ -6,10 +6,10 @@ ZitoAI keeps provider access tokens on the server. Tokens are encrypted before t
 
 | Provider | Local callback | Current production callback |
 |---|---|---|
-| Freesound | `http://localhost:3000/auth/freesound/callback` | `https://www.zitoai.xyz/auth/freesound/callback` |
-| Shutterstock | `http://localhost:3000/auth/shutterstock/callback` | `https://www.zitoai.xyz/auth/shutterstock/callback` |
+| Freesound | `http://localhost:3000/auth/freesound/callback` | `https://asp.zitoai.xyz/auth/freesound/callback` |
+| Shutterstock | `http://localhost:3000/auth/shutterstock/callback` | `https://asp.zitoai.xyz/auth/shutterstock/callback` |
 
-The production origin is `https://www.zitoai.xyz`. Register it exactly in each provider console and keep `OAUTH_CALLBACK_BASE_URL` identical.
+The production OAuth callback origin is `https://asp.zitoai.xyz`. Register it exactly in each provider console and keep `OAUTH_CALLBACK_BASE_URL` identical.
 
 ## Required server variables
 

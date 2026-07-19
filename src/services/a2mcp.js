@@ -1,5 +1,5 @@
-import { config } from "../config.js";
 import { a2mcpBilling } from "./x402-payment.js";
+import { config } from "../config.js";
 
 export const A2MCP_PROTOCOL_VERSION = "okx.ai.a2mcp.v1";
 
@@ -22,13 +22,12 @@ export function buildA2McpManifest() {
         name: "Rights-aware media search",
         method: "POST",
         endpoint: `${baseUrl}/api/a2mcp/media-search`,
-        price: billing.price,
-        pricingType: billing.pricingType,
+        price: "free",
+        pricingType: "free",
         serviceMode: "A2MCP",
-        settlement: billing.settlement,
-        paymentRequired: billing.paymentRequired,
-        x402: billing.x402,
-        network: billing.network,
+        settlement: "none",
+        paymentRequired: false,
+        x402: false,
         description: "Takes a media brief and returns normalized provider candidates with preview URLs, license metadata, and the next licensing step.",
         inputSchema: {
           type: "object",

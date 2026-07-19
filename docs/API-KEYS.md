@@ -8,7 +8,7 @@ Verified against official provider pages on 2026-07-16.
 |---|---|---|---|
 | OpenRouter | [API Keys dashboard](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` | Use the model-router key for the brain layer. |
 | Supabase | [Project settings](https://supabase.com/dashboard) | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Needed for auth, evidence storage and private procurement records. |
-| OKX Onchain OS Payment / x402 | [OKX Developer Portal](https://web3.okx.com/onchain-os/dev-portal) | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, `PAY_TO_ADDRESS`, `OKX_PAYMENT_NETWORK`, `OKX_PAYMENT_PRICE_USD` | Needed for the paid ASP call. For OKX.AI listing use `OKX_PAYMENT_NETWORK=eip155:196` and `OKX_PAYMENT_PRICE_USD=$0.02`. |
+| OKX Onchain OS Payment / x402 | [OKX Developer Portal](https://web3.okx.com/onchain-os/dev-portal) | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, `PAY_TO_ADDRESS`, `OKX_PAYMENT_NETWORK`, `OKX_PAYMENT_PRICE_USD` | Optional future billing config. Current A2MCP listing is free and does not require these variables. |
 
 ## The three live licensing APIs
 
@@ -22,8 +22,8 @@ Verified against official provider pages on 2026-07-16.
 
 | Provider | Local callback | Production callback |
 |---|---|---|
-| Freesound | `http://localhost:3000/auth/freesound/callback` | `https://www.zitoai.xyz/auth/freesound/callback` |
-| Shutterstock | `http://localhost:3000/auth/shutterstock/callback` | `https://www.zitoai.xyz/auth/shutterstock/callback` |
+| Freesound | `http://localhost:3000/auth/freesound/callback` | `https://asp.zitoai.xyz/auth/freesound/callback` |
+| Shutterstock | `http://localhost:3000/auth/shutterstock/callback` | `https://asp.zitoai.xyz/auth/shutterstock/callback` |
 
 ## Secret handling
 

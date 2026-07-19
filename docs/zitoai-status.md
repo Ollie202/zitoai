@@ -1,8 +1,8 @@
 # ZitoAI status
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
-ZitoAI is now built as an OKX.AI ASP service with an A2MCP-style API surface.
+ZitoAI is now built as an OKX.AI ASP service with a free A2MCP API surface.
 
 ## Live surface
 
@@ -33,7 +33,8 @@ ZitoAI is now built as an OKX.AI ASP service with an A2MCP-style API surface.
 - `GET https://asp.zitoai.xyz/api/a2mcp`
 - `GET https://asp.zitoai.xyz/api/a2mcp/manifest`
 - `POST https://asp.zitoai.xyz/api/a2mcp/media-search`
-- `POST https://asp.zitoai.xyz/api/a2mcp/evidence-manifest`
+
+Only `POST /api/a2mcp/media-search` is advertised as the public A2MCP service. `POST /api/a2mcp/evidence-manifest` remains an internal/helper API and should not be listed as a separate OKX.AI service.
 
 ### Legacy agent endpoints
 
@@ -60,7 +61,7 @@ ZitoAI is now built as an OKX.AI ASP service with an A2MCP-style API surface.
 - `www.zitoai.xyz` and `zitoai.xyz` still serve the public site.
 - The ASP endpoint is live over HTTPS.
 - Local install is current: `npm install` reports up to date with no vulnerabilities.
-- Local tests currently pass: `26/26`.
+- Local tests currently pass: `27/27`.
 
 ## Latest Railway smoke test
 
@@ -83,7 +84,7 @@ Run date: 2026-07-18
   - Jamendo still works for non-commercial music discovery.
   - Every returned result includes a preview URL, license type, price, and attribution flag/text in the normalized shape.
 
-Current honest status: all three provider lanes are now ready for structured Railway endpoint testing. Jamendo remains a checkout-handoff provider, not an API-purchase provider.
+Current honest status: all three provider lanes are ready for structured Railway endpoint testing. Jamendo remains a checkout-handoff provider, not an API-purchase provider. The public A2MCP route is free and returns results directly with `HTTP 200`.
 
 ## Full prompt smoke test
 
@@ -255,7 +256,7 @@ Current honest status: Freesound search, previews, metadata, license/reference e
 - Freesound live OAuth approval still requires the user to connect an actual Freesound account.
 - Shutterstock licensing still depends on real access-token / subscription entitlement on the provider side.
 - Jamendo public API is read/catalog oriented; the actual music checkout and license certificate step still happens on Jamendo’s web flow, not inside ZitoAI.
-- Paid x402 billing is not enabled yet; the ASP currently runs as a free A2MCP-style service.
+- The public A2MCP service is free. OKX x402 variables are not required unless we later switch billing back on.
 
 ## Current provider model
 
@@ -302,8 +303,8 @@ Current honest status: Freesound search, previews, metadata, license/reference e
 
 8. OKX.AI ASP readiness checks
    - Confirm A2MCP manifest service metadata is correct.
-   - Confirm `POST /api/a2mcp/media-search` response is understandable to another agent.
-   - Confirm no paid/x402 metadata is advertised until payment integration is intentionally added.
+   - Confirm `POST /api/a2mcp/media-search` returns `HTTP 200` with a normal media-search JSON result.
+   - Confirm the A2MCP manifest advertises `paymentRequired=false` and `x402=false`.
 
 9. Demo rehearsal
    - Run one image demo through Shutterstock.
@@ -311,9 +312,9 @@ Current honest status: Freesound search, previews, metadata, license/reference e
    - Run one music-track demo through Jamendo handoff.
    - Generate an evidence pack for the strongest demo asset.
 
-10. Payment phase
-   - OKX Agent Payments Protocol / x402 is the only public mode for the media-search route.
-   - Re-test paid endpoint behavior separately after the Railway payment variables are set.
+10. Optional payment phase
+   - OKX Agent Payments Protocol / x402 can be re-enabled later if we decide to list the service as paid.
+   - Re-test paid endpoint behavior separately only after Railway payment variables are set.
 
 ## OKX Payment SDK / x402 install status
 
@@ -330,25 +331,22 @@ Current honest status:
 
 - The SDK is installed in `package.json` / `package-lock.json`.
 - The only public A2MCP service is `POST /api/a2mcp/media-search`.
-- Default listing/runtime price is `$0.02` via `OKX_PAYMENT_PRICE_USD`.
-- The public listing is now paid-only: no free mode is advertised.
-- With the OKX payment credentials present, the endpoint first returns a standard x402 `402 Payment Required` challenge, then returns the normal media-search result after paid replay.
+- The current public listing is free: no x402 payment challenge is required.
 - Existing tests pass after wiring.
-- The remaining payment setup is operational, not code: set `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, and `PAY_TO_ADDRESS` in Railway.
-- Production listing should use X Layer mainnet (`eip155:196`).
+- There is no current payment blocker. If we later switch back to paid, Railway will need `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, and `PAY_TO_ADDRESS`, and production listing should use X Layer mainnet (`eip155:196`).
 
 ## OKX.AI registration stance
 
-ZitoAI should be listed as an ASP with A2MCP services. It is not an A2A negotiation worker. The current service contract is intentionally free for now and returns the result directly through standardized API endpoints.
+ZitoAI should be listed as an ASP with one A2MCP service. It is not an A2A negotiation worker. The current service contract is free and returns results directly.
 
 Alignment with the OKX.AI docs checked on 2026-07-18:
 
 - OKX.AI supports three roles: User, ASP, and Evaluator. ZitoAI is an ASP.
-- ASPs can register A2A, A2MCP, or both. ZitoAI is currently A2MCP only.
-- A2MCP is for standardized MCP/API services. ZitoAI exposes `POST /api/a2mcp/media-search` and `POST /api/a2mcp/evidence-manifest` as standardized API services.
+- ASPs can register A2A, A2MCP, or both. ZitoAI is A2MCP only.
+- A2MCP is for standardized MCP/API services. ZitoAI advertises one standardized public service: `POST /api/a2mcp/media-search`.
 - A2MCP services are expected to run automatically after registration and launch. ZitoAI’s endpoints are machine-callable and do not require manual negotiation.
-- OKX.AI A2MCP settlement is normally instant per call through OKX Payment SDK. ZitoAI now advertises `paymentRequired=true` and `pricingType=pay_per_call` for the public media-search route.
-- Because ZitoAI is A2MCP/free right now, there is no arbitration flow in the current service contract. Provider purchase/licensing gates remain inside ZitoAI’s provider-specific workflow and evidence pack.
+- OKX.AI A2MCP can be free or x402 pay-per-call. ZitoAI currently advertises `paymentRequired=false` and `pricingType=free` for the public media-search route.
+- Because ZitoAI is free A2MCP, there is no A2A negotiation/arbitration flow in the current service contract. Provider purchase/licensing gates remain inside ZitoAI’s provider-specific workflow and evidence pack.
 
 ## Working rule for edits
 
