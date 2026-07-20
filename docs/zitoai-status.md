@@ -23,6 +23,8 @@ ZitoAI is a free OKX.AI ASP and A2MCP API service for rights-aware media search.
 ZitoAI can:
 
 - Accept natural language media requests from users, agents or OKX.AI callers.
+- Accept multilingual briefs, including English, major world languages, Nigerian Pidgin, Yoruba, Igbo and Hausa.
+- Preserve the original user request while creating an English provider-ready search query for Shutterstock, Freesound and Jamendo.
 - Infer or respect requested media type.
 - Route image requests to Shutterstock.
 - Route sound effect and ambience requests to Freesound.
@@ -101,6 +103,50 @@ Before registration or production handoff:
 6. Test one music prompt against `/api/a2mcp/media-search`.
 7. Confirm the A2MCP manifest advertises free billing and no x402 challenge.
 8. Confirm Railway has only the production variables listed in `.env.example`.
+
+## Latest endpoint flow test
+
+Date: 2026-07-20
+
+Endpoint tested locally:
+
+```text
+POST /api/a2mcp/media-search
+```
+
+Test shape:
+
+- 15 languages and moods for Shutterstock image licensing discovery.
+- 15 languages and moods for Freesound sound effect and ambience discovery.
+- 15 languages and moods for Jamendo music licensing discovery.
+- Provider lanes were forced during testing so each provider was validated directly.
+- OpenRouter parsing and ranking were active, with calls paced to respect the 20 calls per minute guardrail.
+
+Result:
+
+| Provider | Final result |
+|---|---:|
+| Shutterstock | 15 / 15 |
+| Freesound | 15 / 15 |
+| Jamendo | 14 / 15 on full rerun, then the remaining Russian Jamendo case passed on isolated rerun |
+
+Hardening added from this test:
+
+- Multilingual media-type detection for image, sound effect and music prompts.
+- Search fallback handling for translated or non-English provider queries.
+- Top-level `licenseUrl` fields on provider results so agents can find license links without inspecting nested metadata.
+- Retry handling for transient provider fetch failures.
+
+Current multilingual behavior:
+
+- OpenRouter/Gemini parses incoming language, usage, mood, keywords and media type.
+- The backend stores `originalQuery`, `sourceLanguage`, `translated`, and provider-ready English `query` in the normalized brief.
+- Local fallback includes basic support for Nigerian Pidgin, Yoruba, Igbo and Hausa media cues when OpenRouter is unavailable.
+- The frontend shows the detected language, provider search query and original request when they differ.
+
+Honest limitation:
+
+The endpoint returns provider licensing, source and checkout links. It does not claim that a paid provider purchase has happened unless a real provider license action or external checkout evidence is recorded.
 
 ## Current registration copy
 

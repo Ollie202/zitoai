@@ -12,7 +12,7 @@ export function buildA2McpManifest() {
     role: "ASP",
     serviceType: "A2MCP",
     mode: "standardized_api_service",
-    description: "Free rights-aware media search API for licensable images, sound effects, music tracks, and ambience.",
+    description: "Free multilingual rights-aware media search API for licensable images, sound effects, music tracks, and ambience.",
     baseUrl,
     websiteUrl: config.publicBaseUrl.replace(/\/+$/, ""),
     billing,
@@ -28,12 +28,12 @@ export function buildA2McpManifest() {
         settlement: "none",
         paymentRequired: false,
         x402: false,
-        description: "Provides free access to a rights-aware media search assistant. It takes a natural language request, understands the intended use, searches the right provider, filters the results by media type and usage fit, and returns strong matches with licensing details.",
+        description: "Provides free access to a multilingual rights-aware media search assistant. It takes a natural language request in English, Nigerian languages, or other major languages, normalizes it into a provider-ready search brief, searches the right provider, filters the results by media type and usage fit, and returns strong matches with licensing details.",
         inputSchema: {
           type: "object",
           required: ["query"],
           properties: {
-            query: { type: "string", description: "Plain-language media request." },
+            query: { type: "string", description: "Plain-language media request in English, Nigerian languages, or other major languages." },
             assetType: { type: "string", enum: ["image", "sound_effect", "music"], description: "Optional target media type. If omitted, ZitoAI infers the scope from the natural-language request." },
             intendedUse: { type: "string", description: "Commercial, personal, broadcast, app/game, etc." },
             territory: { type: "string", default: "worldwide" },

@@ -20,12 +20,14 @@ const PARSE_BRIEF_SCHEMA = {
   properties: {
     asset_type: { enum: ["image", "music", "sfx"] },
     usage_rights: { enum: ["personal", "commercial", "broadcast", "resale"] },
+    source_language: { type: "string" },
+    translated_query: { type: "string" },
     keywords: { type: "array", items: { type: "string" }, maxItems: 12 },
     mood: { type: ["string", "null"] },
     max_price: { type: ["number", "null"] },
     format_constraints: { type: ["string", "null"] },
   },
-  required: ["asset_type", "usage_rights", "keywords", "mood", "max_price", "format_constraints"],
+  required: ["asset_type", "usage_rights", "source_language", "translated_query", "keywords", "mood", "max_price", "format_constraints"],
   additionalProperties: false,
 };
 
@@ -101,9 +103,26 @@ export async function normalizeBrief(input) {
         {
           role: "system",
           content:
-            "Extract a media-search brief. Do not decide licensing eligibility. Return only JSON that matches the schema.",
+            [
+              "Extract a provider-ready media-search brief from any language.",
+              "Support English, major world languages, Nigerian Pidgin, Yoruba, Igbo, Hausa, and mixed-language requests.",
+              "Detect whether the user wants an image, music track, or sound effect/ambience.",
+              "Set source_language to a short human-readable language label such as English, Yoruba, Nigerian Pidgin, Hausa, Igbo, Arabic, Japanese, or Mixed.",
+              "Set translated_query to a concise English search query that a stock media API can understand.",
+              "Return English keywords only. Keep the user's original wording out of translated_query unless it is already useful English.",
+              "Do not decide licensing eligibility. Return only JSON that matches the schema.",
+            ].join(" "),
         },
-        { role: "user", content: String(request.query || JSON.stringify(request)).slice(0, config.openRouter.maxInputChars) },
+        {
+          role: "user",
+          content: JSON.stringify({
+            query: request.query || "",
+            assetTypeHint: request.assetType || null,
+            intendedUse: request.intendedUse || null,
+            commercial: request.commercial ?? null,
+            territory: request.territory || null,
+          }).slice(0, config.openRouter.maxInputChars),
+        },
       ],
     });
     return buildBriefResult(body, local, request);
@@ -132,6 +151,8 @@ export async function rankResultsWithOpenRouter(brief, results) {
     brief: {
       asset_type: brief.assetType,
       query: brief.query,
+      original_query: brief.originalQuery || brief.query,
+      source_language: brief.sourceLanguage || null,
       intended_use: brief.intendedUse,
       commercial: brief.commercial,
       keywords: brief.keywords || [],
@@ -218,8 +239,16 @@ function buildBriefResult(body, local, input) {
   const parsed = JSON.parse(body.choices?.[0]?.message?.content || "{}");
   const validated = validateParsedBrief(parsed);
   const usageRights = validated.usage_rights;
+  const translatedQuery = oneLine(validated.translated_query);
+  const providerQuery = translatedQuery || local.query;
   const brief = {
     ...local,
+    originalQuery: local.originalQuery || local.query,
+    query: providerQuery,
+    sourceLanguage: validated.source_language || local.sourceLanguage || "Unknown",
+    translated: Boolean(translatedQuery && translatedQuery.toLowerCase() !== String(local.query || "").toLowerCase()),
+    mood: validated.mood,
+    formatConstraints: validated.format_constraints,
     assetType: input.assetType || resolveAssetType(local.assetType, validated.asset_type),
     intendedUse: input.intendedUse || usageRightsToIntendedUse(usageRights),
     commercial: input.commercial === true || ["commercial", "broadcast", "resale"].includes(usageRights),
@@ -238,6 +267,12 @@ function buildBriefResult(body, local, input) {
       routedBy: "parse_brief",
       usage: body.usage || null,
       parsed: validated,
+      multilingual: {
+        sourceLanguage: brief.sourceLanguage,
+        originalQuery: brief.originalQuery,
+        providerQuery: brief.query,
+        translated: brief.translated,
+      },
       guardrails: openRouterGuardrailStatus(),
     },
   };
@@ -250,6 +285,8 @@ function validateParsedBrief(parsed) {
   return {
     asset_type: parsed.asset_type,
     usage_rights: parsed.usage_rights,
+    source_language: oneLine(parsed.source_language || "Unknown"),
+    translated_query: oneLine(parsed.translated_query || ""),
     keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(String).filter(Boolean).slice(0, 12) : [],
     mood: parsed.mood == null ? null : String(parsed.mood),
     max_price: parsed.max_price == null ? null : Number(parsed.max_price),
@@ -339,6 +376,8 @@ function oneLine(value) {
 
 function resolveAssetType(localAssetType, parsedAssetType) {
   const parsed = ASSET_TYPE_MAP[parsedAssetType] || localAssetType;
+  if (localAssetType === "image" && parsed === "music") return "image";
+  if (localAssetType === "sound_effect" && parsed === "music") return "sound_effect";
   if (SUPPORTED_ASSET_TYPES.has(parsed)) return parsed;
   if (SUPPORTED_ASSET_TYPES.has(localAssetType)) return localAssetType;
   return "music";

@@ -178,7 +178,17 @@ async function loadHistory() {
 function render(body) {
   summary.classList.remove("hidden");
   const recommended = body.recommendedProvider ? label(body.recommendedProvider) : "no provider";
-  summary.textContent = `${body.count} result${body.count === 1 ? "" : "s"} · ${recommended} selected first · ${body.brief.commercial ? "commercial" : "personal"} use · ${body.brief.territory || "worldwide"}`;
+  const language = body.brief.sourceLanguage && body.brief.sourceLanguage !== "Unknown" ? body.brief.sourceLanguage : "auto-detected language";
+  const providerQuery = body.brief.query || body.brief.originalQuery || "";
+  const originalQuery = body.brief.originalQuery && body.brief.originalQuery !== providerQuery
+    ? `<span>Original: ${escapeHtml(body.brief.originalQuery)}</span>`
+    : "";
+  summary.innerHTML = `
+    <strong>${body.count} result${body.count === 1 ? "" : "s"} · ${recommended} selected first · ${body.brief.commercial ? "commercial" : "personal"} use · ${escapeHtml(body.brief.territory || "worldwide")}</strong>
+    <span>Language: ${escapeHtml(language)}</span>
+    <span>Provider search: ${escapeHtml(providerQuery)}</span>
+    ${originalQuery}
+  `;
   if (!body.results.length) {
     results.innerHTML = '<div class="notice">No provider returned a strong match. Try a broader brief, remove extra constraints, or choose a specific media type.</div>';
     return;
@@ -398,7 +408,7 @@ function purchaseStatus(asset) {
 
 async function persistProcurement(payload, blob, format, sha256) {
   const output = $("#pack-status");
-  const created = await api("/api/procurements", { method: "POST", body: { requestText: payload.brief.query, requestPayload: payload, normalizedBrief: payload.brief, status: "quoted" } });
+  const created = await api("/api/procurements", { method: "POST", body: { requestText: payload.brief.originalQuery || payload.brief.query, requestPayload: payload, normalizedBrief: payload.brief, status: "quoted" } });
   const hasProviderEvidence = ["paid", "free_downloaded", "external_purchase_recorded"].includes(payload.purchase.status) && (payload.purchase.providerOrderId || payload.purchase.receiptNumber);
   const purchase = hasProviderEvidence
     ? await api(`/api/procurements/${created.procurement.id}/purchase`, { method: "POST", body: { purchase: payload.purchase, license: licensePayload(payload.asset) } })
