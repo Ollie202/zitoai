@@ -45,7 +45,7 @@ export async function downloadFreesoundOriginal(request, soundId) {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "*/*",
-      "User-Agent": "ZitoAI/0.1 (OKX.AI hackathon prototype)",
+      "User-Agent": "ZitoAI/0.1 (OKX.AI ASP)",
     },
     redirect: "manual",
   });

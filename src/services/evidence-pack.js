@@ -155,7 +155,7 @@ function providerWorkflow(asset, purchase) {
       "Add the project title, project type, licensee/client, usage/channel, and territory details inside Jamendo if requested.",
       "Generate and keep the Jamendo License Certificate after purchase.",
       "Record the invoice/order reference and certificate reference in ZitoAI.",
-      "Attach or archive the Jamendo certificate outside this evidence pack if the final demo/client handoff requires the original document.",
+      "Attach or archive the Jamendo certificate outside this evidence pack if the final client handoff requires the original document.",
     ],
     expectedProjectDetails: jamendoLicense.projectDetailsExpected || [
       "Project title",

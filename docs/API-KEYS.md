@@ -1,6 +1,6 @@
 # API key setup
 
-Verified against official provider pages on 2026-07-16.
+Production credentials belong in Railway variables, `local.env`, or `.env`. Do not commit real credentials.
 
 ## App infrastructure
 
@@ -8,14 +8,14 @@ Verified against official provider pages on 2026-07-16.
 |---|---|---|---|
 | OpenRouter | [API Keys dashboard](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` | Use the model-router key for the brain layer. |
 | Supabase | [Project settings](https://supabase.com/dashboard) | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Needed for auth, evidence storage and private procurement records. |
-| OKX Onchain OS Payment / x402 | [OKX Developer Portal](https://web3.okx.com/onchain-os/dev-portal) | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, `PAY_TO_ADDRESS`, `OKX_PAYMENT_NETWORK`, `OKX_PAYMENT_PRICE_USD` | Optional future billing config. Current A2MCP listing is free and does not require these variables. |
+| Reserved future paid listing | OKX Onchain OS payment setup | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, `PAY_TO_ADDRESS`, `OKX_PAYMENT_NETWORK`, `OKX_PAYMENT_PRICE_USD` | Not required now. The current A2MCP service is free. |
 
 ## The three live licensing APIs
 
 | Provider | Where to obtain access | Environment variable | Notes |
 |---|---|---|---|
 | Shutterstock | [Developer applications](https://www.shutterstock.com/account/developers/apps) | `SHUTTERSTOCK_CLIENT_ID`, `SHUTTERSTOCK_CLIENT_SECRET`, `SHUTTERSTOCK_ACCESS_TOKEN` | Use for image licensing only. Keep `SHUTTERSTOCK_SCOPES=licenses.create licenses.view purchases.view`. |
-| Freesound | [Apply for API access](https://freesound.org/apiv2/apply/) | `FREESOUND_API_KEY`, optionally `FREESOUND_CLIENT_ID`, `FREESOUND_CLIENT_SECRET` | Use for sound effects, ambience and one-shots. |
+| Freesound | [Apply for API access](https://freesound.org/apiv2/apply/) | `FREESOUND_API_KEY`, optionally `FREESOUND_CLIENT_ID`, `FREESOUND_CLIENT_SECRET` | Use for sound effects and ambience. |
 | Jamendo | [Developer portal](https://developer.jamendo.com/v3.0/authentication) | `JAMENDO_CLIENT_ID` | Use for music tracks. Commercial API use requires Jamendo approval. |
 
 ## OAuth callback URLs
@@ -27,8 +27,8 @@ Verified against official provider pages on 2026-07-16.
 
 ## Secret handling
 
-1. Copy `.env.example` to `.env`.
-2. Put credentials only in `.env` or Railway variables.
+1. Copy `.env.example` to `local.env` for local development.
+2. Put production credentials only in Railway variables.
 3. Never send secrets to browser JavaScript or commit them.
 4. Keep Shutterstock scoped for image licensing only.
 5. Keep the rest of the source tree free of dead provider wiring.

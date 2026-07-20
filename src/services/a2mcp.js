@@ -12,7 +12,7 @@ export function buildA2McpManifest() {
     role: "ASP",
     serviceType: "A2MCP",
     mode: "standardized_api_service",
-    description: "Deterministic rights-aware media procurement API for images, sound effects, ambience, one-shots, and music tracks.",
+    description: "Free rights-aware media search API for licensable images, sound effects, music tracks, and ambience.",
     baseUrl,
     websiteUrl: config.publicBaseUrl.replace(/\/+$/, ""),
     billing,
@@ -28,7 +28,7 @@ export function buildA2McpManifest() {
         settlement: "none",
         paymentRequired: false,
         x402: false,
-        description: "Takes a media brief and returns normalized provider candidates with preview URLs, license metadata, and the next licensing step.",
+        description: "Provides free access to a rights-aware media search assistant. It takes a natural language request, understands the intended use, searches the right provider, filters the results by media type and usage fit, and returns strong matches with licensing details.",
         inputSchema: {
           type: "object",
           required: ["query"],

@@ -4,6 +4,8 @@ node_modules/
 local.env
 !.env.example
 coverage/
+output/
+tmp/
 *.log
 .DS_Store
 

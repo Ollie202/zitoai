@@ -1,71 +1,31 @@
-# ZitoAI provider docs
+# ZitoAI docs
 
-ZitoAI now works with three live licensing APIs:
+This folder contains the production documentation for the current ZitoAI build.
 
-1. Shutterstock for image licensing.
-2. Freesound for sound effects, ambience and one-shots.
-3. Jamendo for songs and music tracks.
+## Core documents
 
-## Request lifecycle
+| Document | Purpose |
+|---|---|
+| [Architecture](ARCHITECTURE.md) | System boundary, runtime flow, provider responsibilities and security model |
+| [API keys](API-KEYS.md) | Where to get credentials and which variables are required |
+| [Provider matrix](provider-matrix.md) | Current provider coverage and limitations |
+| [Provider routing](provider-routing.md) | How requests are routed to Shutterstock, Freesound and Jamendo |
+| [Credential-aware adapters](gated-adapters.md) | Provider-specific adapter behavior |
+| [OAuth setup](OAUTH.md) | OAuth callback and account connection notes |
+| [Operational status](zitoai-status.md) | Build status, testing notes and remaining operational tasks |
 
-1. The user describes the asset and intended use.
-2. The brief parser normalizes the request.
-3. Provider connectors search the three active providers only.
-4. The policy layer screens usage and license constraints.
-5. Results are marked `allowed`, `review`, `checkout_only` or `rejected`.
-6. Paid purchasing is deliberately gated behind user confirmation and provider-specific evidence.
+## Current production shape
 
-## Run it
+ZitoAI exposes one free A2MCP API service:
 
-```powershell
-Copy-Item .env.example local.env
-npm start
+```text
+POST https://asp.zitoai.xyz/api/a2mcp/media-search
 ```
 
-Open <http://localhost:3000>.
+The service routes to:
 
-## API surface
+- Shutterstock for images
+- Freesound for sound effects and ambience
+- Jamendo for music tracks
 
-### `GET /api/health`
-
-Returns service version, brain config, storage config and OAuth config.
-
-### `GET /api/providers`
-
-Returns the three live provider definitions and whether each is configured.
-
-### `POST /api/brief`
-
-Normalizes a user request.
-
-### `POST /api/search`
-
-Runs the three live providers concurrently and applies policy checks.
-
-## Important policy decisions
-
-### Shutterstock
-
-Use for image licensing only. Licensing requires the configured access token and the correct license scopes.
-
-### Freesound
-
-Use for sound effects and ambience. Keep file-level license terms attached to the evidence.
-
-### Jamendo
-
-Use for music tracks. Track-level commercial rights and attribution still need verification.
-
-## Evidence bundle planned for the payment phase
-
-- Provider and asset ID
-- Original source URL
-- Provider license URL and terms version/date
-- Customer/licensee identity
-- Provider receipt/license ID
-- Payment transaction hash
-- Exact permitted/prohibited use
-- Attribution text
-- Download URL expiry and asset SHA-256
-
-The evidence bundle is proof of the provider transaction; it is not a new license issued by ZitoAI.
+The docs should stay aligned with that three-provider production boundary unless the code is intentionally expanded.

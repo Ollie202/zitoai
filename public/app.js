@@ -18,24 +18,26 @@ await Promise.all([loadHealth(), loadProviders(), setupAuth()]);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  setStatus("Zito is understanding the brief, ranking providers and screening license conditions…");
+  setStatus("Reading the brief, choosing the provider lane, and checking licensing metadata...");
   summary.classList.add("hidden");
   results.innerHTML = "";
+  const selectedType = $("#asset-type").value;
   const payload = {
     query: $("#query").value,
-    assetType: $("#asset-type").value,
     intendedUse: $("#intended-use").value,
     commercial: $("#intended-use").value !== "personal_content",
     territory: $("#territory").value || "worldwide",
     budgetUsd: $("#budget").value,
-    rawAssetRequired: true,
+    rawAssetRequired: selectedType !== "auto",
     limit: 6,
   };
+  if (selectedType !== "auto") payload.assetType = selectedType;
   try {
-    const body = await api("/api/search", { method: "POST", body: payload, auth: false });
+    const wrapped = await api("/api/a2mcp/media-search", { method: "POST", body: payload, auth: false });
+    const body = wrapped.result || wrapped;
     lastSearch = body;
     render(body);
-    setStatus(body.providers.map((item) => `${label(item.id)}: ${item.ok ? `${item.count} found` : item.error}`).join(" · "));
+    setStatus(providerRunSummary(body));
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -84,12 +86,14 @@ $("#sign-out").addEventListener("click", () => signOut());
 async function loadHealth() {
   try {
     const body = await api("/api/health", { auth: false });
-    brain.textContent = body.brain.configured ? `AI ready · ${shortModel(body.brain.fastModel)} + ${shortModel(body.brain.smartModel)}` : "AI fallback · local parser";
-    storage.textContent = body.storage.configured ? "Private evidence storage ready" : "Evidence downloads ready · cloud storage pending";
+    brain.textContent = body.brain.configured ? `AI ready · ${shortModel(body.brain.fastModel)} + ${shortModel(body.brain.smartModel)}` : "Local parser ready";
+    storage.textContent = body.storage.configured ? "Evidence vault ready" : "Evidence downloads ready";
+    $("#service-mode").textContent = body.payment?.mode === "free" ? "Free A2MCP service" : "Service mode available";
     await refreshOAuthConnections(body.oauth || {});
   } catch {
     brain.textContent = "Service offline";
-    storage.textContent = "Storage unavailable";
+    storage.textContent = "Backend unavailable";
+    $("#service-mode").textContent = "Retry connection";
   }
 }
 
@@ -147,8 +151,8 @@ async function refreshOAuthConnections(oauth = null) {
 
 function renderConnections(oauth, connections = []) {
   const entries = [
-    ["freesound", "Freesound", "Connect a user account for authenticated audio actions."],
-    ["shutterstock", "Shutterstock", "Enabled only when current provider OAuth endpoints are supplied."],
+    ["freesound", "Freesound", "Connect OAuth for authorized original-file actions."],
+    ["shutterstock", "Shutterstock", "Connect OAuth when image licensing needs user-scoped access."],
   ];
   $("#connection-list").innerHTML = entries.map(([id, name, copy]) => {
     const item = oauth[id] || {};
@@ -174,9 +178,9 @@ async function loadHistory() {
 function render(body) {
   summary.classList.remove("hidden");
   const recommended = body.recommendedProvider ? label(body.recommendedProvider) : "no provider";
-  summary.textContent = `${body.count} candidates · routed to ${recommended} first · ${body.brief.commercial ? "commercial" : "personal"} use · ${body.brief.territory}`;
+  summary.textContent = `${body.count} result${body.count === 1 ? "" : "s"} · ${recommended} selected first · ${body.brief.commercial ? "commercial" : "personal"} use · ${body.brief.territory || "worldwide"}`;
   if (!body.results.length) {
-    results.innerHTML = '<div class="notice">No compatible provider returned results. Try a broader request or another asset type.</div>';
+    results.innerHTML = '<div class="notice">No provider returned a strong match. Try a broader brief, remove extra constraints, or choose a specific media type.</div>';
     return;
   }
   results.innerHTML = body.results.map(card).join("");
@@ -194,15 +198,16 @@ function card(asset, index) {
   } else {
     preview = audioUrl ? `<audio controls preload="metadata" src="${escapeAttribute(audioUrl)}"></audio>` : "Audio preview unavailable";
   }
-  const warnings = (asset.policy.warnings || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-  const price = asset.priceUsd == null ? "Check price" : asset.priceUsd === 0 ? "Free" : `$${asset.priceUsd}`;
+  const warnings = (asset.policy?.warnings || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const price = asset.priceUsd == null ? "Provider price" : asset.priceUsd === 0 ? "No API charge" : `$${asset.priceUsd}`;
   const source = asset.sourceUrl ? `<a href="${escapeAttribute(asset.sourceUrl)}" target="_blank" rel="noreferrer">Original source</a>` : "";
   const license = asset.license?.url ? `<a href="${escapeAttribute(asset.license.url)}" target="_blank" rel="noreferrer">License terms</a>` : "";
   const checkout = shouldShowCheckout(asset)
-    ? `<a class="checkout-link" href="${escapeAttribute(asset.purchaseUrl || asset.sourceUrl)}" target="_blank" rel="noreferrer">Open provider checkout</a>`
+    ? `<a class="checkout-link" href="${escapeAttribute(asset.purchaseUrl || asset.sourceUrl)}" target="_blank" rel="noreferrer">Provider licensing step</a>`
     : "";
-  const selectDisabled = asset.policy.verdict === "rejected" ? "disabled" : "";
-  return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${asset.policy.verdict}">${escapeHtml(asset.policy.verdict.replace("_", " "))}</span><p class="policy-summary">${escapeHtml(asset.policy.summary)}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}${checkout}<button class="select-button" data-select="${index}" ${selectDisabled}>Select and document</button></div></div></article>`;
+  const verdict = asset.policy?.verdict || "review";
+  const selectDisabled = verdict === "rejected" ? "disabled" : "";
+  return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${verdict}">${escapeHtml(statusLabel(verdict))}</span><p class="policy-summary">${escapeHtml(asset.policy?.summary || "Review provider terms before using this asset.")}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}${checkout}<button class="select-button" data-select="${index}" ${selectDisabled}>Document evidence</button></div></div></article>`;
 }
 
 function shouldShowCheckout(asset) {
@@ -242,7 +247,7 @@ async function licenseSelectedShutterstockImage() {
     output.textContent = "Confirm the evidence statement before creating a real Shutterstock license.";
     return;
   }
-  const customerId = $("#evidence-customer").value.trim() || "zito-demo-customer";
+  const customerId = $("#evidence-customer").value.trim() || "zito-customer";
   output.textContent = "Creating Shutterstock image license...";
   try {
     const body = await api("/api/providers/shutterstock/license", {
@@ -439,5 +444,10 @@ function downloadBlob(blob, name) { const url = URL.createObjectURL(blob); const
 function shortModel(value) { return String(value || "").split("/").pop(); }
 function providerStatus(provider) { return provider.configured === false ? "credentials needed" : provider.status === "live_public_connector" ? "live" : String(provider.status || "catalogued").replaceAll("_", " "); }
 function label(value) { return ({ shutterstock: "Shutterstock", freesound: "Freesound", jamendo: "Jamendo" })[value] || value; }
+function statusLabel(value) { return ({ allowed: "Allowed", review: "Review needed", checkout_only: "Provider step", rejected: "Rejected" })[value] || String(value).replaceAll("_", " "); }
+function providerRunSummary(body) {
+  if (!Array.isArray(body.providers) || body.providers.length === 0) return "Backend responded. Review the results below.";
+  return body.providers.map((item) => `${label(item.id)}: ${item.ok ? `${item.count} result${item.count === 1 ? "" : "s"}` : item.error}`).join(" · ");
+}
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]); }
 function escapeAttribute(value) { return escapeHtml(value); }

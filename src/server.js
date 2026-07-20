@@ -52,7 +52,15 @@ const agentCard = {
   protocol: "A2MCP",
   capabilities: { streaming: false, pushNotifications: false, a2mcp: true },
   services: [
-    { id: "rights-media-search", name: "Rights-aware media search", endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`, price: "free", paymentRequired: false, x402: false },
+    {
+      id: "rights-media-search",
+      name: "Rights-aware media search",
+      endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`,
+      price: "free",
+      paymentRequired: false,
+      x402: false,
+      description: "Free access to rights-aware search across licensable images, sound effects, music tracks, and ambience.",
+    },
   ],
   safety: { paymentRequiresUserConfirmation: false, legalAdvice: false },
 };
@@ -211,14 +219,6 @@ function json(response, status, body, extraHeaders = {}) {
     ...extraHeaders,
   }));
   response.end(JSON.stringify(body));
-}
-
-function instruction(response, instruction) {
-  const headers = instruction.headers || {};
-  const contentType = headers["Content-Type"] || headers["content-type"] || "application/json; charset=utf-8";
-  response.writeHead(instruction.status || 402, securityHeaders({ ...headers, "Content-Type": contentType, "Cache-Control": "no-store" }));
-  if (instruction.isHtml) return response.end(String(instruction.body || ""));
-  response.end(JSON.stringify(instruction.body || {}));
 }
 
 function binary(response, status, body, contentType, fileName, hash) {

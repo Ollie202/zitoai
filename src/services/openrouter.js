@@ -6,6 +6,7 @@ const PARSE_BRIEF_MODEL = "google/gemini-2.5-flash-lite";
 const RANK_RESULTS_MODEL = "openai/gpt-4o-mini";
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 const ASSET_TYPE_MAP = { image: "image", music: "music", sfx: "sound_effect" };
+const SUPPORTED_ASSET_TYPES = new Set(["image", "music", "sound_effect"]);
 const USAGE_RIGHTS = new Set(["personal", "commercial", "broadcast", "resale"]);
 
 const openRouterUsage = {
@@ -338,6 +339,7 @@ function oneLine(value) {
 
 function resolveAssetType(localAssetType, parsedAssetType) {
   const parsed = ASSET_TYPE_MAP[parsedAssetType] || localAssetType;
-  if (localAssetType && localAssetType !== "music") return localAssetType;
-  return parsed;
+  if (SUPPORTED_ASSET_TYPES.has(parsed)) return parsed;
+  if (SUPPORTED_ASSET_TYPES.has(localAssetType)) return localAssetType;
+  return "music";
 }

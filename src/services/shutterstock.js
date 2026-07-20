@@ -48,7 +48,7 @@ export function buildShutterstockImageLicenseRequest(input = {}) {
   const imageId = String(input.imageId || input.assetId || "").trim();
   if (!imageId) throw new Error("Shutterstock imageId is required");
 
-  const customerId = String(input.customerId || input.licenseeId || "zito-demo-customer").trim();
+  const customerId = String(input.customerId || input.licenseeId || "zito-customer").trim();
   if (!customerId) throw new Error("Shutterstock customerId is required");
   const size = String(input.size || DEFAULT_IMAGE_SIZE).trim();
   const format = String(input.format || DEFAULT_IMAGE_FORMAT).trim();

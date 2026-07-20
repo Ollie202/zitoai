@@ -51,7 +51,7 @@ function asObject(value) {
 function inferAssetType(text) {
   if (/(sound effect|sound effects|sfx|foley|ambience|ambient|room tone|roomtone|click|ping|boom|whoosh|riser|creak|rain|waves|bird|birds|thunder|hum|laser|impact|subway|crowd|noise|buzz|door|pop|sparkle|tick|rustle|wind|chirp|beep|alert|tone)/.test(text)) return "sound_effect";
   if (/(photo|image|illustration|picture|poster|cover|thumbnail|hero image)/.test(text)) return "image";
-  if (/(footage|video|clip|motion|reel|animation|b-roll)/.test(text)) return "video";
   if (/(music|song|track|instrumental|score|soundtrack|lofi|background music|ambient music|melody)/.test(text)) return "music";
+  if (/(footage|video|clip|motion|reel|animation|b-roll)/.test(text)) return "music";
   return "music";
 }

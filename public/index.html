@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="ZitoAI finds licensable media, checks usage restrictions, guides checkout and preserves proof of every license." />
-    <meta property="og:title" content="ZitoAI — Find it. License it. Prove it." />
-    <meta property="og:description" content="A rights-aware media procurement agent built for verifiable licensing." />
+    <meta name="description" content="ZitoAI helps users find licensable images, sound effects, music tracks, and ambience with provider-backed licensing metadata." />
+    <meta property="og:title" content="ZitoAI — Rights-aware media search" />
+    <meta property="og:description" content="A free OKX.AI ASP for finding licensable creative assets through Shutterstock, Freesound, and Jamendo." />
     <meta property="og:image" content="/assets/zito-logo.png" />
-    <title>ZitoAI — Rights-aware media procurement</title>
+    <title>ZitoAI — Rights-aware media search</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/assets/zito-logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -20,103 +20,144 @@
         <span>Zito<span>AI</span></span>
       </a>
       <div class="nav-links">
-        <a href="#how">How it works</a>
+        <a href="#search">Search</a>
         <a href="#providers">Providers</a>
+        <a href="#evidence">Evidence</a>
         <a href="/about.html">About</a>
       </div>
-      <div class="nav-actions"><button id="history-button" class="ghost-button hidden" type="button">History</button><button id="auth-button" class="ghost-button" type="button">Sign in</button></div>
+      <div class="nav-actions">
+        <button id="history-button" class="ghost-button hidden" type="button">History</button>
+        <button id="auth-button" class="ghost-button" type="button">Sign in</button>
+      </div>
     </nav>
 
     <main>
       <section class="hero shell">
         <div class="hero-copy">
-          <p class="eyebrow">OKX.AI rights procurement agent</p>
-          <h1>Find it. License it. <em>Prove it.</em></h1>
-          <p class="lede">Zito turns a plain-language media request into a provider search, rights check, purchase trail and downloadable License Evidence Pack.</p>
+          <p class="eyebrow">Free OKX.AI ASP endpoint</p>
+          <h1>Find licensable media without guessing the rights.</h1>
+          <p class="lede">ZitoAI helps users find images, sound effects, music tracks, and ambience for real creative work. It reads the brief, chooses the right provider, filters the results, and returns licensing details an agent can act on.</p>
           <div class="trust-row">
-            <span id="brain" class="status-pill">Checking AI…</span>
-            <span id="storage" class="status-pill">Checking storage…</span>
-            <span class="status-pill">Human approval before payment</span>
+            <span id="brain" class="status-pill">Checking AI layer</span>
+            <span id="storage" class="status-pill">Checking evidence storage</span>
+            <span id="service-mode" class="status-pill">Free A2MCP service</span>
+          </div>
+          <div class="endpoint-card">
+            <span>Primary endpoint</span>
+            <code>POST https://asp.zitoai.xyz/api/a2mcp/media-search</code>
           </div>
         </div>
         <img class="hero-logo" src="/assets/zito-logo.png" alt="ZitoAI logo" />
       </section>
 
-      <section class="workspace shell">
+      <section id="search" class="workspace shell">
         <div class="section-heading">
-          <div><p class="eyebrow">Start a procurement</p><h2>Describe the asset and how you will use it.</h2></div>
-          <span class="step-chip">01 · Intent</span>
+          <div>
+            <p class="eyebrow">Rights-aware search</p>
+            <h2>Tell ZitoAI what you need and how it will be used.</h2>
+          </div>
+          <span class="step-chip">Live backend</span>
         </div>
         <form id="search-form" class="search-form">
-          <label class="wide">What do you need?
-            <textarea id="query" required placeholder="Upbeat Afrobeats instrumental for a 30-second paid Instagram campaign in Nigeria and the UK"></textarea>
+          <label class="wide">Media brief
+            <textarea id="query" required placeholder="A clean upbeat music track for a 30 second product launch video, worldwide commercial use"></textarea>
           </label>
-          <label>Asset type
-            <select id="asset-type"><option value="music">Music</option><option value="sound_effect">Sound effect</option><option value="image">Image</option><option value="video">Video footage</option></select>
+          <label>Media type
+            <select id="asset-type">
+              <option value="auto">Auto detect</option>
+              <option value="image">Image</option>
+              <option value="music">Music track</option>
+              <option value="sound_effect">Sound effect or ambience</option>
+            </select>
           </label>
           <label>Intended use
-            <select id="intended-use"><option value="commercial_content">Commercial content</option><option value="personal_content">Personal content</option><option value="broadcast_content">Broadcast / film</option><option value="digital_product">App, game or software</option></select>
+            <select id="intended-use">
+              <option value="commercial_content">Commercial content</option>
+              <option value="personal_content">Personal content</option>
+              <option value="broadcast_content">Broadcast, film, or podcast</option>
+              <option value="digital_product">App, game, or software</option>
+            </select>
           </label>
           <label>Territory<input id="territory" value="worldwide" /></label>
-          <label>Maximum budget (USD)<input id="budget" type="number" min="0" step="1" placeholder="No maximum" /></label>
-          <button class="primary-button" type="submit"><span>Search and screen rights</span><span aria-hidden="true">→</span></button>
+          <label>Maximum budget<input id="budget" type="number" min="0" step="1" placeholder="Optional" /></label>
+          <button class="primary-button" type="submit"><span>Search licensing options</span><span aria-hidden="true">→</span></button>
         </form>
+        <p class="form-note">ZitoAI returns candidates and licensing metadata. Provider terms still control the final rights.</p>
       </section>
 
       <section id="status" class="notice hidden shell"></section>
       <section id="summary" class="summary hidden shell"></section>
       <section id="results" class="results shell"></section>
 
-      <section id="how" class="how shell">
-        <div class="section-heading"><div><p class="eyebrow">Evidence-first procurement</p><h2>One request, four controlled stages.</h2></div><span class="step-chip">02–04</span></div>
-        <div class="steps">
-          <article><strong>01</strong><h3>Understand</h3><p>Extract asset type, use, territory, budget and commercial risk from the user’s words.</p></article>
-          <article><strong>02</strong><h3>Route</h3><p>Search the providers most likely to satisfy that specific brief and account configuration.</p></article>
-          <article><strong>03</strong><h3>Clear</h3><p>Reject incompatible terms and surface attribution, checkout and additional-clearance requirements.</p></article>
-          <article><strong>04</strong><h3>Prove</h3><p>Preserve the asset, transaction, license terms, hashes and evidence files in one exportable pack.</p></article>
+      <section id="providers" class="providers-section shell">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Provider routing</p>
+            <h2>Three focused sources, each used for the job it handles best.</h2>
+          </div>
+          <span class="step-chip">Production boundary</span>
+        </div>
+        <div class="provider-grid">
+          <article><strong>Images</strong><h3>Shutterstock</h3><p>Image search, metadata, and image licensing support when the configured account has the right scopes and entitlement.</p></article>
+          <article><strong>Sound</strong><h3>Freesound</h3><p>Sound effects and ambience with preview URLs, creator metadata, and file-level license details.</p></article>
+          <article><strong>Music</strong><h3>Jamendo</h3><p>Music track discovery with preview audio, artist metadata, licensing links, and checkout evidence capture.</p></article>
+        </div>
+        <div class="provider-status-row">
+          <div id="provider-list" class="provider-list"><span>Loading provider status</span></div>
+          <div id="connection-list" class="connection-list"></div>
         </div>
       </section>
 
-      <section id="providers" class="providers-section shell">
-        <p class="eyebrow">Provider-aware by design</p>
-        <h2>Every source keeps its own rules.</h2>
-        <div id="provider-list" class="provider-list"><span>Loading providers…</span></div>
-        <div id="connection-list" class="connection-list"></div>
+      <section id="evidence" class="how shell">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Evidence packs</p>
+            <h2>Search is free. Proof still matters.</h2>
+          </div>
+          <span class="step-chip">PDF + JSON</span>
+        </div>
+        <div class="steps">
+          <article><strong>01</strong><h3>Understand</h3><p>Natural language is converted into a structured media brief with use, territory, budget, and risk signals.</p></article>
+          <article><strong>02</strong><h3>Route</h3><p>The request goes to Shutterstock, Freesound, or Jamendo depending on the asset type and intent.</p></article>
+          <article><strong>03</strong><h3>Screen</h3><p>ZitoAI keeps license metadata, warnings, checkout requirements, and provider restrictions attached to each result.</p></article>
+          <article><strong>04</strong><h3>Record</h3><p>When evidence is supplied, ZitoAI generates a PDF or JSON License Evidence Pack without inventing purchases.</p></article>
+        </div>
       </section>
     </main>
 
     <aside id="evidence-panel" class="evidence-panel hidden" aria-labelledby="evidence-title">
       <div class="evidence-card">
         <button id="evidence-close" class="close-button" aria-label="Close">×</button>
-        <p class="eyebrow">License Evidence Pack</p>
-        <h2 id="evidence-title">Confirm the transaction evidence.</h2>
+        <p class="eyebrow">License evidence</p>
+        <h2 id="evidence-title">Document the selected asset.</h2>
+        <p class="microcopy">Use this only to record real provider details, checkout references, or licensing evidence. ZitoAI will not fabricate a purchase.</p>
         <div id="evidence-asset" class="selected-asset"></div>
         <div id="jamendo-handoff" class="provider-handoff hidden">
-          <h3>Jamendo checkout handoff</h3>
+          <h3>Jamendo licensing handoff</h3>
           <ol>
             <li>Open the Jamendo licensing page for this track.</li>
-            <li>Choose the right license for the project and complete checkout on Jamendo.</li>
-            <li>After payment, add the project details inside Jamendo and generate the License Certificate.</li>
-            <li>Paste the invoice/certificate reference below before generating the Zito evidence pack.</li>
+            <li>Choose the license that matches the project.</li>
+            <li>Complete checkout on Jamendo if commercial use requires it.</li>
+            <li>Record the invoice or certificate reference here before relying on the evidence pack.</li>
           </ol>
           <a id="jamendo-checkout-link" class="secondary-button" href="#" target="_blank" rel="noreferrer">Open Jamendo licensing</a>
         </div>
         <div class="evidence-grid">
-          <label>Provider order ID<input id="evidence-order" placeholder="Optional for a free asset" /></label>
-          <label>Receipt / invoice number<input id="evidence-receipt" placeholder="Optional" /></label>
-          <label>Customer / licensee ID<input id="evidence-customer" placeholder="Client, email, or project ID" /></label>
-          <label>Paid amount (USD)<input id="evidence-amount" type="number" min="0" step="0.01" /></label>
-          <label>Purchase date<input id="evidence-date" type="datetime-local" /></label>
+          <label>Provider order ID<input id="evidence-order" placeholder="Optional until checkout is complete" /></label>
+          <label>Receipt or certificate reference<input id="evidence-receipt" placeholder="Optional" /></label>
+          <label>Customer or licensee ID<input id="evidence-customer" placeholder="Client, email, or project ID" /></label>
+          <label>Amount paid in USD<input id="evidence-amount" type="number" min="0" step="0.01" /></label>
+          <label>Evidence date<input id="evidence-date" type="datetime-local" /></label>
         </div>
-        <label class="confirm-row"><input id="evidence-confirm" type="checkbox" /> I confirm that no payment or license purchase is being fabricated. The pack will record the evidence I provide.</label>
-        <button id="license-shutterstock" class="secondary-button hidden" type="button">License Shutterstock image</button>
-        <button id="license-jamendo" class="secondary-button hidden" type="button">Capture Jamendo license terms</button>
+        <label class="confirm-row"><input id="evidence-confirm" type="checkbox" /> I confirm this pack should record only the evidence I provide and should not be treated as a new license issued by ZitoAI.</label>
+        <button id="license-shutterstock" class="secondary-button hidden" type="button">Create Shutterstock license</button>
+        <button id="license-jamendo" class="secondary-button hidden" type="button">Capture Jamendo terms</button>
         <button id="download-freesound-original" class="secondary-button hidden" type="button">Download Freesound original</button>
         <div class="pack-actions">
-          <button id="download-pdf" class="primary-button" type="button">Generate PDF</button>
-          <button id="download-json" class="secondary-button" type="button">Download JSON</button>
+          <button id="download-pdf" class="primary-button" type="button">Generate PDF pack</button>
+          <button id="download-json" class="secondary-button" type="button">Download JSON pack</button>
         </div>
-        <p id="pack-status" class="microcopy">Sign in to save the procurement and evidence privately. Downloads also work without an account.</p>
+        <p id="pack-status" class="microcopy">Sign in to save procurement history privately. Evidence downloads work without an account.</p>
       </div>
     </aside>
 
@@ -124,9 +165,9 @@
       <div class="auth-card">
         <button id="auth-close" class="close-button" aria-label="Close">×</button>
         <img src="/assets/zito-logo.png" alt="" />
-        <p class="eyebrow">Secure workspace</p>
-        <h2 id="auth-title">Sign in to preserve your evidence.</h2>
-        <p>We will email you a secure magic link. No password is required.</p>
+        <p class="eyebrow">Private evidence vault</p>
+        <h2 id="auth-title">Sign in to save your work.</h2>
+        <p>Use a secure magic link to keep procurement history and evidence records attached to your account.</p>
         <form id="auth-form"><label>Email address<input id="auth-email" type="email" required placeholder="you@example.com" /></label><button class="primary-button" type="submit">Send magic link</button></form>
         <button id="sign-out" class="secondary-button hidden" type="button">Sign out</button>
         <p id="auth-status" class="microcopy"></p>
@@ -138,13 +179,13 @@
         <button id="history-close" class="close-button" aria-label="Close">×</button>
         <p class="eyebrow">Private evidence vault</p>
         <h2 id="history-title">Procurement history</h2>
-        <div id="history-list" class="history-list"><p class="microcopy">Loading…</p></div>
+        <div id="history-list" class="history-list"><p class="microcopy">Loading</p></div>
       </div>
     </aside>
 
     <footer class="footer shell">
       <a class="wordmark" href="/"><img src="/assets/zito-logo.png" alt="" /><span>Zito<span>AI</span></span></a>
-      <p>Rights-aware procurement and evidence—not legal advice.</p>
+      <p>Rights-aware search and evidence support. Provider terms control the final rights.</p>
       <div><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="/data-deletion.html">Data deletion</a><a href="/contact.html">Contact</a></div>
     </footer>
     <script type="module" src="/app.js"></script>

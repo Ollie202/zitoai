@@ -3,7 +3,7 @@
 ZitoAI now routes searches across three live providers only:
 
 - Shutterstock for images
-- Freesound for sound effects, ambience and one-shots
+- Freesound for sound effects and ambience
 - Jamendo for songs and music tracks
 
 ## Ranking inputs
@@ -20,9 +20,9 @@ ZitoAI now routes searches across three live providers only:
 
 Shutterstock is ranked first for image requests. It is the only active image licensing provider in the build.
 
-### Sound effects
+### Sound effects and ambience
 
-Freesound is ranked first for sound effect, ambience and one-shot requests.
+Freesound is ranked first for sound effect and ambience requests.
 
 ### Music
 

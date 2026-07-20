@@ -1,57 +1,62 @@
-# License Hunter — end-to-end architecture
+# ZitoAI architecture
 
-## Product promise
+ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one free A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata.
 
-License Hunter turns a natural-language media request into a rights-aware procurement plan. It does not pretend that one API or one Creative Commons label answers every licensing question. It preserves the provider's original evidence and applies the provider's own rules before any purchase or delivery.
+## Product boundary
 
-## System boundary
+ZitoAI helps users discover licensable media and understand the next licensing step. It does not create rights, transfer rights, provide legal advice, or claim that a provider purchase happened unless provider evidence or user supplied checkout evidence exists.
+
+## Runtime flow
 
 ```text
-User / OKX.AI task
+Agent or user request
         |
         v
-Intent layer (local parser -> OpenRouter enhancement)
+A2MCP endpoint
         |
         v
-Procurement brief + explicit user constraints
+Brief parser
         |
         v
-Provider router -------------------- Provider capability catalog
-        |                                      |
-        v                                      v
-Search adapters (public/gated)        Credential and approval state
+Provider router
+        |
+        +--> Shutterstock for images
+        +--> Freesound for sound effects and ambience
+        +--> Jamendo for music tracks
         |
         v
-Normalized assets
+Provider adapters
         |
         v
-Deterministic rights policy engine
-        |
-        +--> rejected / review / checkout-only
+Normalized media candidates
         |
         v
-Ranked shortlist + rights explanation
+Policy screen and evidence metadata
         |
         v
-User approval gate
-        |
-        +--> provider checkout / customer OAuth
-        +--> OKX Agent Payments Protocol (x402)
-        |
-        v
-License evidence bundle + asset delivery
+A2MCP response with results, scopes, license metadata, previews and next step
 ```
 
-## Core rule
+## Public API surface
 
-The model may interpret language, expand search terms and rank candidates. It must not invent permission. Every provider has a policy profile and every result is screened after retrieval.
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Runtime status for brain, storage, OAuth and payment mode |
+| `GET` | `/.well-known/a2mcp.json` | OKX.AI A2MCP service manifest |
+| `POST` | `/api/a2mcp/media-search` | Primary ASP endpoint for agents |
+| `POST` | `/api/search` | Browser search endpoint |
+| `POST` | `/api/brief` | Brief normalization endpoint |
+| `GET` | `/api/providers` | Provider configuration status |
+| `POST` | `/api/evidence-pack` | JSON or PDF evidence export |
 
-## Normalized procurement brief
+Provider-specific support endpoints exist for OAuth, Shutterstock licensing, Freesound original download, and procurement evidence storage.
+
+## Normalized brief
 
 ```ts
 type ProcurementBrief = {
   query: string;
-  assetType: "music" | "sound_effect" | "image" | "video";
+  assetType: "image" | "sound_effect" | "music";
   intendedUse: string;
   commercial: boolean;
   broadcast: boolean;
@@ -62,167 +67,82 @@ type ProcurementBrief = {
 };
 ```
 
-Later fields to add:
-
-- duration/length
-- audience size
-- platforms and monetization
-- modification/editing required
-- attribution tolerance
-- customer legal name
-- customer country
-- delivery format/resolution
-- deadline
-
 ## Provider adapter contract
 
-Every connector should implement:
+Each provider adapter returns normalized candidates with this shape:
 
 ```ts
-{
-  id,
-  name,
-  status,
-  requiresApiKey,
-  supportedAssetTypes,
-  search(brief, limit),
-  getDetails?(assetId),
-  getRights?(assetId, brief),
-  createCheckout?(assetId, customer),
-  license?(assetId, customer, paymentContext),
-  download?(license),
-  buildEvidence?(license)
-}
+type MediaCandidate = {
+  id: string;
+  provider: "shutterstock" | "freesound" | "jamendo";
+  title: string;
+  creator: string;
+  assetType: "image" | "sound_effect" | "music";
+  previewUrl: string | null;
+  mediaUrl: string | null;
+  sourceUrl: string;
+  purchaseUrl: string | null;
+  priceUsd: number | null;
+  license: {
+    code: string | null;
+    name: string | null;
+    url: string | null;
+    attributionRequired: boolean;
+  };
+  metadata: Record<string, unknown>;
+};
 ```
 
-The public MVP implements `search`, and Stockfilm implements a public rights check. Authenticated adapters are represented in the capability catalog so they can be added without changing the API shape.
+## Provider responsibilities
 
-## Provider states
+### Shutterstock
 
-- `live_public_connector`: callable without signup now.
-- `credential_required`: API key/OAuth is needed.
-- `approval_required`: API key may be free, but provider approval or an enterprise relationship is needed.
-- `free_test_images_only`: test access is not a production multimedia entitlement.
-- `partner_required_for_production`: free prototype access does not authorize launch.
-- `paid_api`: violates the current free-access MVP assumption.
-- `no_documented_api`: do not scrape; request an official feed or permission.
-- `not_a_media_provider`: useful only as a rights/metadata aid.
+Used for image results and image licensing workflows. Search uses the configured Shutterstock access token. Real licensing requires an OAuth access token with the correct license scopes and an active image API subscription.
 
-## Licensing modes
+### Freesound
 
-### Mode A — customer checkout handoff
+Used for sound effects and ambience. Search and previews use the API token. OAuth is used for user-account actions such as original-file download when authorized. Each sound’s own license remains the controlling license.
 
-The agent searches and explains. The user opens the provider checkout and becomes the licensee. This is the safest mode for Free To Use, Adobe Stock and any provider whose terms prohibit transfer.
+### Jamendo
 
-### Mode B — customer OAuth
+Used for music tracks. The public developer API supports catalog search and metadata. Commercial use is handled as a Jamendo licensing handoff unless the account has a separate commercial agreement that authorizes deeper execution.
 
-The customer signs into the provider. The provider licenses to the customer's account. This is the preferred Adobe/enterprise pattern.
+## Brain layer
 
-### Mode C — authorized procurement for a named customer
+OpenRouter improves intent parsing, provider routing, keyword expansion and ranking. It is bounded by guardrails:
 
-The agent pays using an approved account or x402 wallet, but the provider explicitly records the end customer as licensee. MotionElements' pay-per-item licensee change is an example. This requires provider confirmation and an audit trail.
+- 20 calls per minute
+- 12000 input characters per request
+- deterministic fallback when OpenRouter is unavailable
 
-### Mode D — agent-owned license
+The model can improve interpretation and ranking. It cannot override provider policies or invent licensing permission.
 
-Do not use this as a default. A license purchased by License Hunter cannot automatically be transferred, sublicensed or redistributed to an end customer.
+## Storage and evidence
 
-## Evidence bundle
+Supabase stores private procurement records, provider connections, purchases and evidence artifacts when configured. Evidence Packs can also be generated locally as PDF or JSON without requiring a signed-in user.
 
-Store an immutable record containing:
+Evidence Packs record:
 
 - request and normalized brief
 - provider, asset ID and source URL
-- provider terms URL and terms version/date
-- license type and scope
-- customer/licensee identity
-- checkout/license ID and receipt
-- payment transaction hash, network and token
-- rights-check response
-- attribution and ShareAlike instructions
-- original download URL expiry
-- SHA-256 of downloaded asset
-- timestamp and connector version
+- license metadata and controlling URL
+- policy verdict and warnings
+- purchase or checkout evidence if supplied
+- generated hash
 
-Call this a **License Evidence Pack**, not a License Hunter license.
+An Evidence Pack is proof of recorded evidence, not a replacement license.
 
-## Payment architecture
+## Payment mode
 
-The payment module is separate from search. It must:
+The current A2MCP service is free and returns `200` without an x402 challenge. OKX payment SDK packages are not required for this production mode.
 
-1. Display provider, asset, price, network, token, recipient and customer/licensee before payment.
-2. Require explicit user confirmation for every payment.
-3. Use the OKX Agent Payments Protocol for x402 challenges instead of hand-assembling signatures.
-4. Replay the provider request with the returned authorization header.
-5. Store payment and provider license IDs together.
-6. Never pay for a non-transferable asset unless the customer is the provider-recognized licensee.
+Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. The free A2MCP call does not mean provider assets are free to use.
 
 ## Security model
 
-- Provider API keys stay server-side in environment variables or a secret manager.
-- The browser never receives provider keys or wallet secrets.
-- Do not log Authorization headers, payment challenges or downloaded raw assets.
-- Keep previews separate from licensed downloads.
-- Use short-lived signed download URLs.
-- Hash evidence, but do not publish customer personal information.
-- Rate-limit each provider independently.
-- Cache metadata, not raw files, unless the provider terms permit temporary processing.
-- Add SSRF protection before accepting arbitrary provider URLs.
-
-## Failure and fallback behavior
-
-- Provider timeout: mark provider unavailable and continue with fallbacks.
-- Missing license metadata: reject or require manual review.
-- Ambiguous license: never convert it to `allowed` using an LLM.
-- Payment succeeds but download fails: preserve receipt/license ID and provide a re-download path if the provider permits it.
-- Licensee mismatch: stop delivery and require provider/customer correction.
-- Terms change: invalidate cached policy and require re-check.
-
-## 16-hour execution plan
-
-### Hours 0–2: foundation (complete)
-
-- normalized brief
-- provider contract
-- public connectors
-- deterministic policy engine
-- local UI
-
-### Hours 2–5: provider access
-
-- create provider accounts
-- request Adobe, MotionElements and partner credentials
-- test Shutterstock free image account
-- obtain Freesound/Jamendo keys
-- record every approval and limitation in `.env.example` and the provider matrix
-
-### Hours 5–8: intent and ranking
-
-- add OpenRouter key
-- enforce structured JSON output
-- add missing-field questions
-- add provider-specific query expansion
-- cache normalized briefs and provider metadata
-
-### Hours 8–11: procurement
-
-- implement customer checkout links
-- implement customer identity/licensee fields
-- add MotionElements pay-per-item flow if approved
-- add Adobe customer OAuth if approved
-- add Stockfilm x402 only after licensee confirmation
-
-### Hours 11–14: evidence and safety
-
-- evidence-pack storage
-- asset hashing
-- receipts and provider terms snapshots
-- retry/rate-limit handling
-- payment confirmation UI
-
-### Hours 14–16: demo hardening
-
-- scripted demo scenarios
-- provider failure fallback
-- no-key demo mode
-- final legal caveats
-- deployment and handoff checklist
+- Provider secrets stay in server environment variables.
+- Browser code never receives provider secrets, service role keys or wallet credentials.
+- Authorization headers and OAuth tokens must not be logged.
+- Raw media delivery is only allowed when provider terms permit it.
+- Metadata can be cached; raw assets should not be cached unless provider terms allow it.
+- User supplied evidence is recorded as evidence, not treated as automatically verified.
