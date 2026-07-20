@@ -4,7 +4,7 @@ Last updated: 2026-07-20
 
 ## Current state
 
-ZitoAI is a free OKX.AI ASP and A2MCP API service for rights-aware media search.
+ZitoAI is a zero-fee OKX.AI ASP and A2MCP API service for rights-aware media search. The endpoint is free to call, but it still uses an x402 challenge so OKX agents can complete the standard pay-and-replay flow.
 
 | Item | Status |
 |---|---|
@@ -12,8 +12,8 @@ ZitoAI is a free OKX.AI ASP and A2MCP API service for rights-aware media search.
 | ASP base | Live at https://asp.zitoai.xyz |
 | A2MCP manifest | Live at https://asp.zitoai.xyz/.well-known/a2mcp.json |
 | Primary service endpoint | `POST https://asp.zitoai.xyz/api/a2mcp/media-search` |
-| Pricing mode | Free |
-| Payment challenge | Disabled |
+| Pricing mode | Zero-fee x402 |
+| Payment challenge | Enabled with amount `0` |
 | Active providers | Shutterstock, Freesound, Jamendo |
 | Brain layer | OpenRouter with deterministic fallback |
 | Storage | Supabase optional for private history and evidence |
@@ -33,6 +33,7 @@ ZitoAI can:
 - Generate PDF or JSON License Evidence Packs from supplied provider and transaction evidence.
 - Store private procurement history and evidence when Supabase is configured.
 - Expose an A2MCP manifest for OKX.AI registration.
+- Return a valid 402 payment challenge on unpaid A2MCP media-search requests.
 
 ## What the service does not claim
 
@@ -101,7 +102,7 @@ Before registration or production handoff:
 4. Test one image prompt against `/api/a2mcp/media-search`.
 5. Test one sound effect or ambience prompt against `/api/a2mcp/media-search`.
 6. Test one music prompt against `/api/a2mcp/media-search`.
-7. Confirm the A2MCP manifest advertises free billing and no x402 challenge.
+7. Confirm unpaid calls to `/api/a2mcp/media-search` return HTTP `402` with an `accepts` array.
 8. Confirm Railway has only the production variables listed in `.env.example`.
 
 ## Latest endpoint flow test
@@ -144,6 +145,15 @@ Current multilingual behavior:
 - Local fallback includes basic support for Nigerian Pidgin, Yoruba, Igbo and Hausa media cues when OpenRouter is unavailable.
 - The frontend shows the detected language, provider search query and original request when they differ.
 
+Latest x402 reviewer fix:
+
+- The endpoint is no longer treated as plain free HTTP.
+- Unpaid GET and POST requests to `/api/a2mcp/media-search` return HTTP `402`.
+- The 402 body includes `x402Version: 1` and an `accepts` array.
+- The accepted asset is X Layer USDT: `0x779ded0c9e1022225f8e0630b35a9b54be713736`.
+- The accepted amount is `0`, matching the free listing while preserving the OKX pay-and-replay handshake.
+- Replayed POST requests with a payment proof header return HTTP `200` and the normal A2MCP result.
+
 Honest limitation:
 
 The endpoint returns provider licensing, source and checkout links. It does not claim that a paid provider purchase has happened unless a real provider license action or external checkout evidence is recorded.
@@ -159,12 +169,12 @@ ZitoAI helps users quickly find licensable images, sound effects, music tracks, 
 Service description:
 
 ```text
-ZitoAI provides free access to a rights-aware media search and licensing assistant. It takes a natural language request, understands the intended use, searches the most relevant provider, filters the results by media type and usage fit, and returns the strongest matches for images, sound effects, music tracks, and ambience with the licensing details needed to choose the right asset.
+ZitoAI provides zero-fee x402 access to a rights-aware media search and licensing assistant. It takes a natural language request, understands the intended use, searches the most relevant provider, filters the results by media type and usage fit, and returns the strongest matches for images, sound effects, music tracks, and ambience with the licensing details needed to choose the right asset.
 ```
 
 ## Remaining operational work
 
-- Complete OKX.AI ASP registration after copy and service details are final.
+- Re-run OKX x402 validation against the live Railway deployment after this fix is deployed.
 - Keep provider tokens fresh in Railway.
 - Rotate any provider secrets that were exposed in screenshots or chat.
-- Only reintroduce payment dependencies if the listing intentionally changes from free to paid.
+- If the listing intentionally changes from zero-fee to paid, update `OKX_PAYMENT_AMOUNT`, the registration fee, and the reviewer-facing docs together.

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
-import { paymentStatus } from "./services/x402-payment.js";
+import { buildX402Challenge, hasX402PaymentProof, paymentStatus, x402ChallengeHeaders } from "./services/x402-payment.js";
 import { brainStatus, normalizeBrief } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
@@ -56,10 +56,10 @@ const agentCard = {
       id: "rights-media-search",
       name: "Rights-aware media search",
       endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`,
-      price: "free",
-      paymentRequired: false,
-      x402: false,
-      description: "Free access to rights-aware search across licensable images, sound effects, music tracks, and ambience.",
+      price: paymentStatus().price,
+      paymentRequired: true,
+      x402: true,
+      description: "Zero-fee x402 access to rights-aware search across licensable images, sound effects, music tracks, and ambience.",
     },
   ],
   safety: { paymentRequiresUserConfirmation: false, legalAdvice: false },
@@ -145,9 +145,19 @@ const server = createServer(async (request, response) => {
       return json(response, 200, await searchAssets(await readJson(request)));
     }
     if (request.method === "POST" && url.pathname === "/api/agent/search") {
-      return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", role: "ASP", protocol: "A2MCP", paymentRequired: false });
+      return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", role: "ASP", protocol: "A2MCP", paymentRequired: true, x402: true });
     }
-    if (request.method === "POST" && url.pathname === "/api/a2mcp/media-search") {
+    if (url.pathname === "/api/a2mcp/media-search") {
+      if (!hasX402PaymentProof(request)) {
+        const challenge = buildX402Challenge({
+          resource: `${config.aspBaseUrl.replace(/\/+$/, "")}/api/a2mcp/media-search`,
+          method: "POST",
+        });
+        return json(response, 402, challenge, x402ChallengeHeaders(challenge));
+      }
+      if (request.method !== "POST") {
+        return json(response, 405, { error: "Use POST with a JSON body after completing the x402 pay-and-replay handshake." });
+      }
       const body = wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request)));
       return json(response, 200, body);
     }

@@ -1,6 +1,6 @@
 # ZitoAI architecture
 
-ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one free A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata.
+ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one zero-fee x402 A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata after the standard OKX Agent Payments Protocol pay-and-replay handshake.
 
 ## Product boundary
 
@@ -13,6 +13,9 @@ Agent or user request
         |
         v
 A2MCP endpoint
+        |
+        v
+Zero-fee x402 challenge on unpaid request
         |
         v
 Brief parser
@@ -43,7 +46,7 @@ A2MCP response with results, scopes, license metadata, previews and next step
 |---|---|---|
 | `GET` | `/api/health` | Runtime status for brain, storage, OAuth and payment mode |
 | `GET` | `/.well-known/a2mcp.json` | OKX.AI A2MCP service manifest |
-| `POST` | `/api/a2mcp/media-search` | Primary ASP endpoint for agents |
+| `GET` or `POST` | `/api/a2mcp/media-search` | Primary ASP endpoint for agents. Unpaid requests return a 402 challenge. Replayed POST requests return results |
 | `POST` | `/api/search` | Browser search endpoint |
 | `POST` | `/api/brief` | Brief normalization endpoint |
 | `GET` | `/api/providers` | Provider configuration status |
@@ -134,9 +137,9 @@ An Evidence Pack is proof of recorded evidence, not a replacement license.
 
 ## Payment mode
 
-The current A2MCP service is free and returns `200` without an x402 challenge. OKX payment SDK packages are not required for this production mode.
+The current A2MCP service uses zero-fee x402. Unpaid calls to `/api/a2mcp/media-search` return HTTP `402` with an `accepts` array containing X Layer USDT and amount `0`. After the OKX Agent Payments Protocol pay-and-replay handshake, the same POST request returns HTTP `200` with the media-search result.
 
-Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. The free A2MCP call does not mean provider assets are free to use.
+Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. The zero-fee A2MCP call does not mean provider assets are free to use.
 
 ## Security model
 

@@ -12,10 +12,15 @@ export const config = {
     apiKey: process.env.OKX_API_KEY || "",
     secretKey: process.env.OKX_SECRET_KEY || "",
     passphrase: process.env.OKX_PASSPHRASE || "",
-    payToAddress: process.env.PAY_TO_ADDRESS || "",
+    payToAddress: process.env.PAY_TO_ADDRESS || process.env.OKX_PAYMENT_PAY_TO_ADDRESS || "",
     baseUrl: process.env.OKX_BASE_URL || "https://web3.okx.com",
     network: process.env.OKX_PAYMENT_NETWORK || "eip155:196",
-    priceUsd: process.env.OKX_PAYMENT_PRICE_USD || "$0.02",
+    assetAddress:
+      process.env.OKX_PAYMENT_ASSET ||
+      process.env.OKX_PAYMENT_TOKEN_ADDRESS ||
+      "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+    amount: process.env.OKX_PAYMENT_AMOUNT || "0",
+    priceUsd: process.env.OKX_PAYMENT_PRICE_USD || "0 USDT",
     syncSettle: parseBoolean(process.env.OKX_PAYMENT_SYNC_SETTLE),
   },
   openRouter: {

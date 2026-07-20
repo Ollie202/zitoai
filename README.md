@@ -26,7 +26,7 @@ ZitoAI does not route production search traffic to earlier prototype or research
 
 ## A2MCP service
 
-The current public OKX.AI listing mode is free.
+The current public OKX.AI listing mode is zero-fee x402.
 
 ```text
 Service name: Rights Media Search
@@ -35,10 +35,13 @@ Fee: 0 USDT
 Endpoint: https://asp.zitoai.xyz/api/a2mcp/media-search
 ```
 
+Unpaid calls return HTTP `402` with an `accepts` array. OKX agents should complete the standard pay-and-replay handshake, then replay the POST request to receive results.
+
 Example request:
 
 ```bash
 curl -X POST https://asp.zitoai.xyz/api/a2mcp/media-search \
+  -H "X-PAYMENT: <payment-proof-from-okx-pay-and-replay>" \
   -H "Content-Type: application/json" \
   -d "{\"query\":\"upbeat music for a 30 second product launch video\",\"assetType\":\"music\",\"intendedUse\":\"commercial_content\",\"territory\":\"worldwide\",\"limit\":5}"
 ```
@@ -79,6 +82,7 @@ Minimum useful production variables:
 - `FREESOUND_API_KEY`
 - `JAMENDO_CLIENT_ID`
 - Supabase variables if private history and evidence storage are enabled
+- `PAY_TO_ADDRESS`, `OKX_PAYMENT_TOKEN_ADDRESS`, `OKX_PAYMENT_AMOUNT=0` for the zero-fee x402 challenge
 
 See [API key setup](docs/API-KEYS.md) for exact provider links and scopes.
 
@@ -103,7 +107,7 @@ supabase/               Database migration for evidence and procurement records
 - ZitoAI does not invent licenses, receipts, or legal clearance.
 - Provider terms control the actual rights.
 - Evidence Packs record proof supplied by provider APIs, receipts, and user supplied checkout evidence. They do not create new rights.
-- Paid provider purchases remain separate from the free A2MCP call and must be backed by provider evidence.
+- Paid provider purchases remain separate from the zero-fee A2MCP call and must be backed by provider evidence.
 
 ## Documentation
 
