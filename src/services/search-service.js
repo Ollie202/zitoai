@@ -65,7 +65,12 @@ export async function searchAssets(input) {
 
   return {
     brief,
-    brain: { ...brain, ranking: aiRanking.ranking },
+    processing: {
+      aiAssisted: Boolean(brain?.used || aiRanking.ranking?.used),
+      sourceLanguage: brief.sourceLanguage || "Unknown",
+      translated: Boolean(brief.translated),
+      providerQuery: brief.query,
+    },
     recommendedProvider: providerStatus.find((provider) => provider.ok)?.id || null,
     providers: providerStatus,
     count: aiRanking.results.length,

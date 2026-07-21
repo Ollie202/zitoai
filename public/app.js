@@ -26,15 +26,14 @@ form.addEventListener("submit", async (event) => {
     query: $("#query").value,
     intendedUse: $("#intended-use").value,
     commercial: $("#intended-use").value !== "personal_content",
-    territory: $("#territory").value || "worldwide",
+    territory: "worldwide",
     budgetUsd: $("#budget").value,
     rawAssetRequired: selectedType !== "auto",
     limit: 6,
   };
   if (selectedType !== "auto") payload.assetType = selectedType;
   try {
-    const wrapped = await api("/api/a2mcp/media-search", { method: "POST", body: payload, auth: false });
-    const body = wrapped.result || wrapped;
+    const body = await api("/api/search", { method: "POST", body: payload, auth: false });
     lastSearch = body;
     render(body);
     setStatus(providerRunSummary(body));
@@ -86,9 +85,9 @@ $("#sign-out").addEventListener("click", () => signOut());
 async function loadHealth() {
   try {
     const body = await api("/api/health", { auth: false });
-    brain.textContent = body.brain.configured ? `AI ready · ${shortModel(body.brain.fastModel)} + ${shortModel(body.brain.smartModel)}` : "Local parser ready";
+    brain.textContent = body.brain.configured ? "AI parsing ready" : "Fallback parser ready";
     storage.textContent = body.storage.configured ? "Evidence vault ready" : "Evidence downloads ready";
-    $("#service-mode").textContent = body.payment?.mode === "free" ? "Free A2MCP service" : "Service mode available";
+    $("#service-mode").textContent = body.payment?.x402Active ? "OKX agent endpoint ready" : "Service mode available";
     await refreshOAuthConnections(body.oauth || {});
   } catch {
     brain.textContent = "Service offline";
@@ -100,7 +99,7 @@ async function loadHealth() {
 async function loadProviders() {
   try {
     const body = await api("/api/providers", { auth: false });
-    $("#provider-list").innerHTML = body.providers.map((provider) => `<span class="provider-token ${escapeAttribute(provider.status || "")}">${escapeHtml(provider.name)} · ${providerStatus(provider)}</span>`).join("");
+    $("#provider-list").innerHTML = body.providers.map((provider) => `<span class="provider-token ${escapeAttribute(provider.id || "")}">${escapeHtml(publicProviderLabel(provider))}</span>`).join("");
   } catch {
     $("#provider-list").textContent = "Provider status unavailable.";
   }
@@ -150,16 +149,7 @@ async function refreshOAuthConnections(oauth = null) {
 }
 
 function renderConnections(oauth, connections = []) {
-  const entries = [
-    ["freesound", "Freesound", "Connect OAuth for authorized original-file actions."],
-    ["shutterstock", "Shutterstock", "Connect OAuth when image licensing needs user-scoped access."],
-  ];
-  $("#connection-list").innerHTML = entries.map(([id, name, copy]) => {
-    const item = oauth[id] || {};
-    const connected = connections.find((connection) => connection.provider === id);
-    const labelText = connected ? `Connected as ${connected.account_label || connected.provider_account_id || "account"}` : item.configured ? "Connect account" : "Credentials pending";
-    return `<article class="connection-card"><h3>${name}</h3><p class="microcopy">${copy}</p><button class="secondary-button" data-connect="${id}" ${item.configured && !connected ? "" : "disabled"}>${escapeHtml(labelText)}</button></article>`;
-  }).join("");
+  $("#connection-list").innerHTML = "";
 }
 
 async function loadHistory() {
@@ -184,7 +174,7 @@ function render(body) {
     ? `<span>Original: ${escapeHtml(body.brief.originalQuery)}</span>`
     : "";
   summary.innerHTML = `
-    <strong>${body.count} result${body.count === 1 ? "" : "s"} · ${recommended} selected first · ${body.brief.commercial ? "commercial" : "personal"} use · ${escapeHtml(body.brief.territory || "worldwide")}</strong>
+    <strong>${body.count} result${body.count === 1 ? "" : "s"} · ${recommended} selected first · ${body.brief.commercial ? "commercial" : "personal"} use</strong>
     <span>Language: ${escapeHtml(language)}</span>
     <span>Provider search: ${escapeHtml(providerQuery)}</span>
     ${originalQuery}
@@ -451,13 +441,20 @@ async function api(path, options = {}) {
 
 function setStatus(message, isError = false) { status.classList.remove("hidden", "error"); if (isError) status.classList.add("error"); status.textContent = message; }
 function downloadBlob(blob, name) { const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-function shortModel(value) { return String(value || "").split("/").pop(); }
 function providerStatus(provider) { return provider.configured === false ? "credentials needed" : provider.status === "live_public_connector" ? "live" : String(provider.status || "catalogued").replaceAll("_", " "); }
 function label(value) { return ({ shutterstock: "Shutterstock", freesound: "Freesound", jamendo: "Jamendo" })[value] || value; }
 function statusLabel(value) { return ({ allowed: "Allowed", review: "Review needed", checkout_only: "Provider step", rejected: "Rejected" })[value] || String(value).replaceAll("_", " "); }
 function providerRunSummary(body) {
   if (!Array.isArray(body.providers) || body.providers.length === 0) return "Backend responded. Review the results below.";
   return body.providers.map((item) => `${label(item.id)}: ${item.ok ? `${item.count} result${item.count === 1 ? "" : "s"}` : item.error}`).join(" · ");
+}
+function publicProviderLabel(provider) {
+  const labels = {
+    shutterstock: "Images routed through Shutterstock",
+    freesound: "Sound effects and ambience routed through Freesound",
+    jamendo: "Music tracks routed through Jamendo",
+  };
+  return labels[provider.id] || `${provider.name} ready`;
 }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]); }
 function escapeAttribute(value) { return escapeHtml(value); }

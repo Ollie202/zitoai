@@ -55,6 +55,18 @@ const RANK_RESULTS_SCHEMA = {
 export function brainStatus() {
   return {
     configured: Boolean(config.openRouter.apiKey),
+    status: config.openRouter.apiKey ? "ready" : "fallback",
+    fallbackAvailable: true,
+    guardrails: {
+      maxCallsPerMinute: config.openRouter.maxCallsPerMinute,
+      maxInputChars: config.openRouter.maxInputChars,
+    },
+  };
+}
+
+export function internalBrainStatus() {
+  return {
+    configured: Boolean(config.openRouter.apiKey),
     model: PARSE_BRIEF_MODEL,
     fastModel: PARSE_BRIEF_MODEL,
     smartModel: RANK_RESULTS_MODEL,
@@ -196,7 +208,7 @@ export async function rankResultsWithOpenRouter(brief, results) {
     });
     const parsed = JSON.parse(body.choices?.[0]?.message?.content || "{}");
     const ranked = validateRanking(parsed, candidates);
-    return { results: applyRanking(candidates, ranked), ranking: { used: true, mode: "openrouter", model: body.model || RANK_RESULTS_MODEL, usage: body.usage || null } };
+    return { results: applyRanking(candidates, ranked), ranking: { used: true, mode: "ai-assisted" } };
   } catch (error) {
     logOpenRouterEvent({ functionName: "rank_results", model: RANK_RESULTS_MODEL, success: false, fallback: true, reason: error.message });
     return { results: candidates, ranking: { used: false, mode: "fallback-unranked", error: error.message, guardrails: openRouterGuardrailStatus() } };
@@ -260,20 +272,13 @@ function buildBriefResult(body, local, input) {
     brief,
     brain: {
       used: true,
-      mode: "openrouter",
-      model: body.model || PARSE_BRIEF_MODEL,
-      selectedModel: PARSE_BRIEF_MODEL,
-      attemptedModels: [PARSE_BRIEF_MODEL],
-      routedBy: "parse_brief",
-      usage: body.usage || null,
-      parsed: validated,
+      mode: "ai-assisted",
       multilingual: {
         sourceLanguage: brief.sourceLanguage,
         originalQuery: brief.originalQuery,
         providerQuery: brief.query,
         translated: brief.translated,
       },
-      guardrails: openRouterGuardrailStatus(),
     },
   };
 }
