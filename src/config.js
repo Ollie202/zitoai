@@ -56,6 +56,14 @@ export const config = {
     maxCallsPerMinute: Number(process.env.OPENROUTER_MAX_CALLS_PER_MINUTE || 20),
     maxInputChars: Number(process.env.OPENROUTER_MAX_INPUT_CHARS || 12000),
   },
+  usage: {
+    // The spend ceiling only means something if it survives a deploy, so durable
+    // accounting is on whenever Supabase is configured.
+    durableSpend: parseBoolean(process.env.USAGE_DURABLE_SPEND ?? "true"),
+    // Off by default: with a single replica the in-memory limiter is correct and avoids
+    // a database round trip on every request. Turn this on when scaling past one.
+    sharedRateLimit: parseBoolean(process.env.USAGE_SHARED_RATE_LIMIT),
+  },
   supabase: {
     url: process.env.SUPABASE_URL || "",
     anonKey: process.env.SUPABASE_ANON_KEY || "",

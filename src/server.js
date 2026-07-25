@@ -6,13 +6,14 @@ import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
 import { buildX402Challenge, hasX402PaymentProof, paymentStatus, x402ChallengeHeaders } from "./services/x402-payment.js";
-import { brainStatus, normalizeBrief } from "./services/openrouter.js";
+import { brainStatus, normalizeBrief, restoreSpendFromStore } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
 import { completeOAuth, oauthStatus, startOAuth } from "./services/oauth.js";
 import { downloadFreesoundOriginal, freesoundStatus, getFreesoundMe } from "./services/freesound.js";
 import { jamendoStatus } from "./services/jamendo.js";
 import { jamendoTrackId, streamJamendoDownload } from "./services/jamendo-download.js";
+import { hitSharedRateLimit, pruneUsageCounters, usageStoreStatus } from "./services/usage-store.js";
 import {
   getShutterstockImageDetails,
   licenseShutterstockImage,
@@ -88,7 +89,7 @@ const server = createServer(async (request, response) => {
     }
 
     if (RATE_LIMITED_PREFIXES.some((prefix) => url.pathname === prefix)) {
-      const limit = checkRateLimit(request);
+      const limit = await enforceRateLimit(request);
       if (!limit.ok) {
         return json(response, 429, {
           error: "Too many requests. Please retry shortly.",
@@ -104,6 +105,7 @@ const server = createServer(async (request, response) => {
         version: "0.1.0",
         brain: brainStatus(),
         storage: storageStatus(),
+        usage: usageStoreStatus(),
         oauth: oauthStatus(),
         payment: paymentStatus(),
       });
@@ -315,9 +317,20 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
   });
 }
 
-server.listen(config.port, () => {
+// Expired rate-limit windows are cleared periodically rather than on the request path.
+// unref() so this timer never holds the process open during shutdown.
+const usagePruneTimer = setInterval(() => {
+  pruneUsageCounters().catch(() => {});
+}, 60 * 60 * 1000);
+usagePruneTimer.unref();
+
+server.listen(config.port, async () => {
   console.log(`ZitoAI running at http://localhost:${config.port}`);
   console.log(`OpenRouter: ${brainStatus().configured ? "configured" : "local fallback"}`);
+  // Resumes the persisted spend total so a redeploy does not hand out a fresh budget.
+  // Awaited here rather than at import time so a slow database never delays listening.
+  const restored = await restoreSpendFromStore().catch(() => null);
+  if (restored) console.log(`Restored OpenRouter spend total: $${Number(restored).toFixed(6)}`);
 });
 
 export default server;
@@ -453,6 +466,17 @@ function getHeader(request, name) {
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
 const rateLimitMaxRequests = Number(process.env.RATE_LIMIT_MAX_REQUESTS || 30);
 const rateLimitBuckets = new Map();
+
+// The in-memory window is always consulted, so a single replica keeps its fast local
+// decision and the service still limits when the shared store is unreachable. When the
+// shared backend is enabled it is authoritative, because it sees every replica.
+async function enforceRateLimit(request) {
+  const local = checkRateLimit(request);
+  const shared = await hitSharedRateLimit(clientIp(request), rateLimitWindowMs, rateLimitMaxRequests);
+  if (!shared) return local;
+  if (!shared.ok) return { ok: false, retryAfterSeconds: shared.retryAfterSeconds };
+  return local;
+}
 
 function checkRateLimit(request) {
   const now = Date.now();
