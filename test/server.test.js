@@ -8,7 +8,7 @@ process.env.PORT = process.env.TEST_PORT || "3199";
 process.env.RATE_LIMIT_MAX_REQUESTS = "5";
 process.env.RATE_LIMIT_WINDOW_MS = "60000";
 
-const { default: server } = await import("../src/server.js");
+const { default: server, errorStatus, clientErrorMessage } = await import("../src/server.js");
 if (!server.listening) await once(server, "listening");
 const base = `http://127.0.0.1:${server.address().port}`;
 
@@ -111,6 +111,39 @@ test("errors map to meaningful status codes", async () => {
 
   const missing = await fetch(`${base}/api/does-not-exist`, { method: "POST" });
   assert.equal(missing.status, 404);
+});
+
+// The outage this guards against: a runtime failure carrying the words "not found" was
+// matched by a loose rule and reported as 404, so a total breakage of every Supabase
+// route looked like a routing mistake for weeks. Unrecognised faults must be 5xx, and
+// their detail must never reach the caller.
+test("an unrecognised runtime fault maps to 5xx, not 404", () => {
+  const runtimeFaults = [
+    "Node.js detected but native WebSocket not found.\n\nSuggested solution: Ensure you are running Node.js 22+",
+    "Cannot read properties of undefined (reading 'id')",
+    "fetch failed",
+    "module not found",
+  ];
+  for (const message of runtimeFaults) {
+    const status = errorStatus(new Error(message));
+    assert.ok(status >= 500, `"${message.slice(0, 40)}" should be 5xx, got ${status}`);
+    assert.doesNotMatch(clientErrorMessage(new Error(message)), /WebSocket|undefined|module/, "internal detail must not be echoed");
+  }
+});
+
+test("recognised client mistakes keep their precise status", () => {
+  assert.equal(errorStatus(new Error("Request body is too large")), 413);
+  assert.equal(errorStatus(new Error("Request body must be valid JSON")), 400);
+  assert.equal(errorStatus(new Error("Authentication required.")), 401);
+  assert.equal(errorStatus(new Error("Invalid or expired session.")), 401);
+  assert.equal(errorStatus(new Error("Procurement not found.")), 404);
+  assert.equal(errorStatus(new Error("Evidence path does not belong to this procurement.")), 404);
+  assert.equal(errorStatus(new Error("A search query is required.")), 400);
+  assert.equal(errorStatus(new Error("Track id must be numeric.")), 400);
+  assert.equal(errorStatus(new Error("Supabase is not configured.")), 503);
+
+  // Messages that survive to the caller are the ones that tell them what to fix.
+  assert.equal(clientErrorMessage(new Error("A search query is required.")), "A search query is required.");
 });
 
 test("static file serving refuses path traversal", async () => {

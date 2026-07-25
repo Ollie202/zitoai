@@ -275,10 +275,13 @@ function errorStatus(error) {
   if (message === "Request body is too large") return 413;
   if (message === "Request body must be valid JSON") return 400;
   if (/^Authentication required\.$|^Invalid or expired session\.$/.test(message)) return 401;
-  if (/does not belong to this procurement|not found/i.test(message)) return 404;
+  // Anchored to the messages this service actually raises. A loose "not found" match
+  // once reported a missing WebSocket global as a 404, hiding a real runtime failure
+  // behind a client-error status.
+  if (/^Procurement not found\.$|does not belong to this procurement/.test(message)) return 404;
   // A missing credential is an operator problem, not a caller mistake.
-  if (/is not configured/i.test(message)) return 503;
-  if (/is required|must be|invalid|unsupported/i.test(message)) return 400;
+  if (/is not configured\.?$/i.test(message)) return 503;
+  if (/^A search query is required|Track id must be numeric|must be valid JSON|Unsupported OAuth provider/i.test(message)) return 400;
   if (error?.status && Number.isInteger(error.status)) return error.status >= 500 ? 502 : error.status;
   return 500;
 }
@@ -324,8 +327,24 @@ const usagePruneTimer = setInterval(() => {
 }, 60 * 60 * 1000);
 usagePruneTimer.unref();
 
+// @supabase/supabase-js needs a native WebSocket, which only exists from Node 22. On an
+// older runtime every Supabase-backed route fails at client construction — the kind of
+// mismatch that is invisible locally and total in production, so it is stated at boot.
+const MINIMUM_NODE_MAJOR = 22;
+
+function assertRuntimeVersion() {
+  const major = Number(process.versions.node.split(".")[0]);
+  if (major >= MINIMUM_NODE_MAJOR) return;
+  console.error(
+    `[zitoai] WARNING: running Node ${process.versions.node}. Node ${MINIMUM_NODE_MAJOR}+ is required — ` +
+    "@supabase/supabase-js needs a native WebSocket, so sign-in, procurement history and " +
+    "evidence storage will fail on this runtime.",
+  );
+}
+
 server.listen(config.port, async () => {
-  console.log(`ZitoAI running at http://localhost:${config.port}`);
+  console.log(`ZitoAI running at http://localhost:${config.port} on Node ${process.versions.node}`);
+  assertRuntimeVersion();
   console.log(`OpenRouter: ${brainStatus().configured ? "configured" : "local fallback"}`);
   // Resumes the persisted spend total so a redeploy does not hand out a fresh budget.
   // Awaited here rather than at import time so a slow database never delays listening.
@@ -334,6 +353,10 @@ server.listen(config.port, async () => {
 });
 
 export default server;
+
+// Exported for tests: the status mapping is the piece that once hid a total outage
+// behind a 404.
+export { errorStatus, clientErrorMessage };
 
 function json(response, status, body, extraHeaders = {}) {
   response.writeHead(status, securityHeaders({
