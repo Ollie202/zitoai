@@ -112,13 +112,35 @@ Used for music tracks. The public developer API supports catalog search and meta
 
 ## Brain layer
 
-OpenRouter improves intent parsing, provider routing, keyword expansion and ranking. It is bounded by guardrails:
+OpenRouter improves intent parsing, translation, provider routing, keyword expansion and ranking. Two models are used:
 
-- 20 calls per minute
+| Function | Model variable | Role |
+|---|---|---|
+| `parse_brief` | `OPENROUTER_FAST_MODEL` | Detects the source language, translates the request into a provider-ready English query, and classifies media type and usage rights |
+| `rank_results` | `OPENROUTER_SMART_MODEL` | Reorders the candidates the providers returned |
+
+Both calls use strict JSON-schema structured outputs. Every schema property declares an explicit `type`: an enum without a type is not valid under strict mode, and providers that enforce it satisfy `required` by emitting `null`, which previously caused a complete and correctly translated brief to be rejected by validation.
+
+Validation is deliberately asymmetric. The translated query is the valuable output, so an unrecognised classifier value degrades rather than discards: `asset_type` falls back to local inference and `usage_rights` to the conservative `personal` default. Only structurally unusable output is rejected.
+
+It is bounded by guardrails:
+
+- 20 model calls per minute
+- 25 USD cumulative spend per process
 - 12000 input characters per request
-- deterministic fallback when OpenRouter is unavailable
+- deterministic local fallback when OpenRouter is unavailable, rate limited, or over budget
 
-The model can improve interpretation and ranking. It cannot override provider policies or invent licensing permission.
+The model can improve interpretation and ranking. It cannot override provider policies or invent licensing permission — `rank_results` output is checked against the returned candidate set, so a hallucinated asset is rejected.
+
+## Request guardrails
+
+| Guard | Default | Behaviour on limit |
+|---|---|---|
+| Per-IP rate limit on search routes | 30 per minute | `429` with `Retry-After` |
+| Request body size | 100 KB | `413`, with the remaining upload drained so the response is delivered cleanly |
+| Provider query candidates per search | 4, retried only on the primary | Returns the first response rather than repeating a known-empty query |
+
+The A2MCP endpoint sets permissive CORS on every response including the `402`, and answers `OPTIONS` preflight with `204` before the payment gate, so browser-based agents can read the challenge.
 
 ## Storage and evidence
 

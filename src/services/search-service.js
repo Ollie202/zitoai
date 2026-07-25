@@ -5,7 +5,14 @@ import { normalizeBrief, rankResultsWithOpenRouter } from "./openrouter.js";
 
 export async function searchAssets(input) {
   input = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-  const { brief, brain } = await normalizeBrief(input);
+
+  // Validate before the AI layer runs. An empty query used to reach the model, which
+  // invented a brief from nothing and returned unrelated results at the cost of two
+  // OpenRouter calls per request.
+  const requestedQuery = String(input.query || "").trim();
+  if (!requestedQuery) throw new Error("A search query is required.");
+
+  const { brief, brain } = await normalizeBrief({ ...input, query: requestedQuery });
   if (!brief.query) throw new Error("A search query is required.");
 
   const requested = Array.isArray(input.providers) ? new Set(input.providers) : null;

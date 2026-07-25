@@ -2,6 +2,16 @@ import { config } from "../config.js";
 import { fetchJson } from "../lib/http.js";
 import { shutterstockApiBase } from "../services/shutterstock.js";
 
+// Caps the fan-out when a search finds nothing. Previously up to 9 candidate queries
+// were tried, each retried twice, so one inbound search could become ~27 upstream
+// requests against a provider quota.
+const MAX_QUERY_CANDIDATES = 4;
+
+// The primary query is worth retrying through transient upstream failures. Fallback
+// candidates are best-effort discovery, so a failure just moves to the next candidate.
+const PRIMARY_RETRIES = 2;
+const FALLBACK_RETRIES = 0;
+
 export const shutterstockProvider = {
   id: "shutterstock", name: "Shutterstock", status: "image_license_ready",
   requiresApiKey: true, supportedAssetTypes: ["image"],
@@ -106,11 +116,15 @@ export const gatedProviders = [shutterstockProvider, freesoundProvider, jamendoP
 
 async function fetchShutterstockImages(brief, limit) {
   const candidates = shutterstockQueryCandidates(brief);
+  const headers = { Authorization: `Bearer ${config.credentials.shutterstock.accessToken}` };
   let firstUrl = null;
+  let firstBody = null;
   for (let index = 0; index < candidates.length; index += 1) {
     const url = buildShutterstockSearchUrl(candidates[index], limit);
     if (!firstUrl) firstUrl = url;
-    const body = await fetchJsonWithRetry(url, { headers: { Authorization: `Bearer ${config.credentials.shutterstock.accessToken}` } });
+    const body = await fetchCandidate(url, { headers }, index);
+    if (body === null) continue;
+    if (!firstBody) firstBody = body;
     if ((body.data || []).length > 0) {
       return index === 0
         ? body
@@ -125,7 +139,9 @@ async function fetchShutterstockImages(brief, limit) {
           };
     }
   }
-  return fetchJsonWithRetry(buildShutterstockSearchUrl(candidates[0], limit), { headers: { Authorization: `Bearer ${config.credentials.shutterstock.accessToken}` } });
+  // Every candidate came back empty. Return the first response we already have rather
+  // than re-requesting candidate 0, which is known to be empty.
+  return firstBody || { data: [] };
 }
 
 function buildShutterstockSearchUrl(query, limit) {
@@ -146,16 +162,19 @@ function shutterstockQueryCandidates(brief) {
   if (original && original !== primary) candidates.push(original);
   if (keywords.length) candidates.push(keywords.join(" "));
   for (const word of keywords.slice(0, 5)) candidates.push(word);
-  return Array.from(new Set(candidates.filter(Boolean)));
+  return Array.from(new Set(candidates.filter(Boolean))).slice(0, MAX_QUERY_CANDIDATES);
 }
 
 async function fetchFreesoundSounds(brief, limit) {
   const candidates = freesoundQueryCandidates(brief);
   let firstUrl = null;
+  let firstBody = null;
   for (let index = 0; index < candidates.length; index += 1) {
     const url = buildFreesoundSearchUrl(candidates[index], limit);
     if (!firstUrl) firstUrl = url;
-    const body = await fetchJsonWithRetry(url);
+    const body = await fetchCandidate(url, {}, index);
+    if (body === null) continue;
+    if (!firstBody) firstBody = body;
     if ((body.results || []).length > 0) {
       return index === 0
         ? body
@@ -170,8 +189,8 @@ async function fetchFreesoundSounds(brief, limit) {
           };
     }
   }
-  const finalBody = await fetchJsonWithRetry(buildFreesoundSearchUrl(candidates[0], limit));
-  return finalBody;
+  // Same as Shutterstock: reuse the first empty response instead of repeating it.
+  return firstBody || { results: [] };
 }
 
 function buildFreesoundSearchUrl(query, limit) {
@@ -220,7 +239,7 @@ function freesoundQueryCandidates(brief) {
   if (translatedHints.length) candidates.push(translatedHints.join(" "));
   if (keywords.length) candidates.push(keywords.join(" "));
   for (const word of keywords.slice(0, 5)) candidates.push(word);
-  return Array.from(new Set(candidates.filter(Boolean)));
+  return Array.from(new Set(candidates.filter(Boolean))).slice(0, MAX_QUERY_CANDIDATES);
 }
 
 function translatedFreesoundHints(text) {
@@ -276,6 +295,18 @@ async function fetchJamendoResponse(url) {
     throw new Error(body.headers.error_message || "Jamendo search failed");
   }
   return body;
+}
+
+// Fetches one candidate query. A failure on the primary query is a real provider
+// problem and propagates so the caller reports it. A failure on a fallback candidate
+// is best-effort, so it yields null and the loop moves on.
+async function fetchCandidate(url, options, index) {
+  if (index === 0) return fetchJsonWithRetry(url, options, PRIMARY_RETRIES);
+  try {
+    return await fetchJsonWithRetry(url, options, FALLBACK_RETRIES);
+  } catch {
+    return null;
+  }
 }
 
 async function fetchJsonWithRetry(url, options = {}, retries = 2) {

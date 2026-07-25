@@ -31,7 +31,11 @@ export const config = {
       process.env.OPENROUTER_SMART_MODEL || "openai/gpt-4o-mini",
     siteUrl: process.env.OPENROUTER_SITE_URL || process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
     appName: process.env.OPENROUTER_APP_NAME || "ZitoAI",
-    maxSpendUsd: parseOptionalNumber(process.env.OPENROUTER_MAX_SPEND_USD),
+    // Defaults to an active ceiling rather than "unlimited". Left unset, the budget
+    // guard silently never fired, because Number.isFinite(null) is false. Set
+    // OPENROUTER_MAX_SPEND_USD=0 to intentionally disable spending entirely, or raise it
+    // for a longer-running deployment.
+    maxSpendUsd: parseOptionalNumber(process.env.OPENROUTER_MAX_SPEND_USD) ?? 25,
     maxCallsPerMinute: Number(process.env.OPENROUTER_MAX_CALLS_PER_MINUTE || 20),
     maxInputChars: Number(process.env.OPENROUTER_MAX_INPUT_CHARS || 12000),
   },

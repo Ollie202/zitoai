@@ -2,8 +2,8 @@ import { config } from "../config.js";
 import { normalizeBriefLocally } from "../core/brief.js";
 import { fetchJson } from "../lib/http.js";
 
-const PARSE_BRIEF_MODEL = "google/gemini-2.5-flash-lite";
-const RANK_RESULTS_MODEL = "openai/gpt-4o-mini";
+const DEFAULT_PARSE_BRIEF_MODEL = "google/gemini-2.5-flash-lite";
+const DEFAULT_RANK_RESULTS_MODEL = "openai/gpt-4o-mini";
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 const ASSET_TYPE_MAP = { image: "image", music: "music", sfx: "sound_effect" };
 const SUPPORTED_ASSET_TYPES = new Set(["image", "music", "sound_effect"]);
@@ -15,14 +15,17 @@ const openRouterUsage = {
   events: [],
 };
 
+// Every property carries an explicit `type`. Enum-only properties are not valid under
+// strict structured outputs: providers that enforce `strict: true` satisfy `required`
+// by emitting `null`, which silently discarded an otherwise-complete brief.
 const PARSE_BRIEF_SCHEMA = {
   type: "object",
   properties: {
-    asset_type: { enum: ["image", "music", "sfx"] },
-    usage_rights: { enum: ["personal", "commercial", "broadcast", "resale"] },
+    asset_type: { type: "string", enum: ["image", "music", "sfx"] },
+    usage_rights: { type: "string", enum: ["personal", "commercial", "broadcast", "resale"] },
     source_language: { type: "string" },
     translated_query: { type: "string" },
-    keywords: { type: "array", items: { type: "string" }, maxItems: 12 },
+    keywords: { type: "array", items: { type: "string" } },
     mood: { type: ["string", "null"] },
     max_price: { type: ["number", "null"] },
     format_constraints: { type: ["string", "null"] },
@@ -52,14 +55,24 @@ const RANK_RESULTS_SCHEMA = {
   additionalProperties: false,
 };
 
+function parseBriefModel() {
+  return config.openRouter.fastModel || DEFAULT_PARSE_BRIEF_MODEL;
+}
+
+function rankResultsModel() {
+  return config.openRouter.smartModel || DEFAULT_RANK_RESULTS_MODEL;
+}
+
 export function brainStatus() {
   return {
     configured: Boolean(config.openRouter.apiKey),
     status: config.openRouter.apiKey ? "ready" : "fallback",
     fallbackAvailable: true,
+    models: { parseBrief: parseBriefModel(), rankResults: rankResultsModel() },
     guardrails: {
       maxCallsPerMinute: config.openRouter.maxCallsPerMinute,
       maxInputChars: config.openRouter.maxInputChars,
+      maxSpendUsd: config.openRouter.maxSpendUsd,
     },
   };
 }
@@ -67,11 +80,11 @@ export function brainStatus() {
 export function internalBrainStatus() {
   return {
     configured: Boolean(config.openRouter.apiKey),
-    model: PARSE_BRIEF_MODEL,
-    fastModel: PARSE_BRIEF_MODEL,
-    smartModel: RANK_RESULTS_MODEL,
-    parseBriefModel: PARSE_BRIEF_MODEL,
-    rankResultsModel: RANK_RESULTS_MODEL,
+    model: parseBriefModel(),
+    fastModel: parseBriefModel(),
+    smartModel: rankResultsModel(),
+    parseBriefModel: parseBriefModel(),
+    rankResultsModel: rankResultsModel(),
     fallback: "deterministic-local-parser",
     guardrails: openRouterGuardrailStatus(),
   };
@@ -100,14 +113,14 @@ export async function normalizeBrief(input) {
 
   const guard = canCallOpenRouter("parse_brief", JSON.stringify(request));
   if (!guard.ok) {
-    logOpenRouterEvent({ functionName: "parse_brief", model: PARSE_BRIEF_MODEL, success: false, fallback: true, reason: guard.reason });
+    logOpenRouterEvent({ functionName: "parse_brief", model: parseBriefModel(), success: false, fallback: true, reason: guard.reason });
     return { brief: local, brain: { used: false, mode: "local-fallback", error: guard.reason, guardrails: openRouterGuardrailStatus() } };
   }
 
   try {
     const body = await requestStructuredJson({
       functionName: "parse_brief",
-      model: PARSE_BRIEF_MODEL,
+      model: parseBriefModel(),
       schemaName: "zito_parse_brief",
       schema: PARSE_BRIEF_SCHEMA,
       maxTokens: 180,
@@ -122,6 +135,8 @@ export async function normalizeBrief(input) {
               "Set source_language to a short human-readable language label such as English, Yoruba, Nigerian Pidgin, Hausa, Igbo, Arabic, Japanese, or Mixed.",
               "Set translated_query to a concise English search query that a stock media API can understand.",
               "Return English keywords only. Keep the user's original wording out of translated_query unless it is already useful English.",
+              "Set usage_rights to personal unless the request clearly signals business use: advertising, marketing, a client or brand campaign, a monetised channel, broadcast, or resale.",
+              "A private, family, or hobby request is personal even when it names an occasion such as a birthday or wedding.",
               "Do not decide licensing eligibility. Return only JSON that matches the schema.",
             ].join(" "),
         },
@@ -139,13 +154,13 @@ export async function normalizeBrief(input) {
     });
     return buildBriefResult(body, local, request);
   } catch (error) {
-    logOpenRouterEvent({ functionName: "parse_brief", model: PARSE_BRIEF_MODEL, success: false, fallback: true, reason: error.message });
+    logOpenRouterEvent({ functionName: "parse_brief", model: parseBriefModel(), success: false, fallback: true, reason: error.message });
     return {
       brief: local,
       brain: {
         used: false,
         mode: "local-fallback",
-        attemptedModels: [PARSE_BRIEF_MODEL],
+        attemptedModels: [parseBriefModel()],
         error: error.message,
         guardrails: openRouterGuardrailStatus(),
       },
@@ -186,14 +201,14 @@ export async function rankResultsWithOpenRouter(brief, results) {
 
   const guard = canCallOpenRouter("rank_results", payload);
   if (!guard.ok) {
-    logOpenRouterEvent({ functionName: "rank_results", model: RANK_RESULTS_MODEL, success: false, fallback: true, reason: guard.reason });
+    logOpenRouterEvent({ functionName: "rank_results", model: rankResultsModel(), success: false, fallback: true, reason: guard.reason });
     return { results: candidates, ranking: { used: false, mode: "fallback-unranked", error: guard.reason, guardrails: openRouterGuardrailStatus() } };
   }
 
   try {
     const body = await requestStructuredJson({
       functionName: "rank_results",
-      model: RANK_RESULTS_MODEL,
+      model: rankResultsModel(),
       schemaName: "zito_rank_results",
       schema: RANK_RESULTS_SCHEMA,
       maxTokens: 350,
@@ -210,14 +225,14 @@ export async function rankResultsWithOpenRouter(brief, results) {
     const ranked = validateRanking(parsed, candidates);
     return { results: applyRanking(candidates, ranked), ranking: { used: true, mode: "ai-assisted" } };
   } catch (error) {
-    logOpenRouterEvent({ functionName: "rank_results", model: RANK_RESULTS_MODEL, success: false, fallback: true, reason: error.message });
+    logOpenRouterEvent({ functionName: "rank_results", model: rankResultsModel(), success: false, fallback: true, reason: error.message });
     return { results: candidates, ranking: { used: false, mode: "fallback-unranked", error: error.message, guardrails: openRouterGuardrailStatus() } };
   }
 }
 
 export function selectModel(input = {}) {
   const request = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-  return request.rankResults ? RANK_RESULTS_MODEL : PARSE_BRIEF_MODEL;
+  return request.rankResults ? rankResultsModel() : parseBriefModel();
 }
 
 async function requestStructuredJson({ functionName, model, schemaName, schema, maxTokens, messages }) {
@@ -283,13 +298,17 @@ function buildBriefResult(body, local, input) {
   };
 }
 
+// The translation is the valuable part of a brief. A single unrecognised classifier
+// value must never discard it: asset_type falls back to local inference and
+// usage_rights to the conservative "personal" default. Only structurally unusable
+// output (non-object, or no usable query at all) is rejected outright.
 function validateParsedBrief(parsed) {
   if (!parsed || typeof parsed !== "object") throw new Error("parse_brief returned invalid JSON");
-  if (!ASSET_TYPE_MAP[parsed.asset_type]) throw new Error("parse_brief returned invalid asset_type");
-  if (!USAGE_RIGHTS.has(parsed.usage_rights)) throw new Error("parse_brief returned invalid usage_rights");
+  const assetType = ASSET_TYPE_MAP[parsed.asset_type] ? parsed.asset_type : null;
+  const usageRights = USAGE_RIGHTS.has(parsed.usage_rights) ? parsed.usage_rights : "personal";
   return {
-    asset_type: parsed.asset_type,
-    usage_rights: parsed.usage_rights,
+    asset_type: assetType,
+    usage_rights: usageRights,
     source_language: oneLine(parsed.source_language || "Unknown"),
     translated_query: oneLine(parsed.translated_query || ""),
     keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(String).filter(Boolean).slice(0, 12) : [],

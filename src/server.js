@@ -65,9 +65,36 @@ const agentCard = {
   safety: { paymentRequiresUserConfirmation: false, legalAdvice: false },
 };
 
+// Search routes call OpenRouter and the licensing providers, so they cost real quota on
+// every hit. Cheap metadata routes are exempt.
+const RATE_LIMITED_PREFIXES = ["/api/search", "/api/agent/search", "/api/brief", "/api/a2mcp/media-search", "/api/evidence-pack"];
+
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+
+    // Applied to every response, including 402 and error paths, so a browser client can
+    // read the challenge instead of seeing an opaque CORS failure.
+    for (const [name, value] of Object.entries(corsHeaders(request))) {
+      response.setHeader(name, value);
+    }
+
+    // Preflight has to answer before any auth or payment gate, otherwise browsers see
+    // the 402 as a CORS failure and never send the real request.
+    if (request.method === "OPTIONS") {
+      response.writeHead(204, securityHeaders({ "Content-Length": "0" }));
+      return response.end();
+    }
+
+    if (RATE_LIMITED_PREFIXES.some((prefix) => url.pathname === prefix)) {
+      const limit = checkRateLimit(request);
+      if (!limit.ok) {
+        return json(response, 429, {
+          error: "Too many requests. Please retry shortly.",
+          retryAfterSeconds: limit.retryAfterSeconds,
+        }, { "Retry-After": String(limit.retryAfterSeconds) });
+      }
+    }
 
     if (request.method === "GET" && url.pathname === "/api/health") {
       return json(response, 200, {
@@ -212,15 +239,43 @@ const server = createServer(async (request, response) => {
 
     return json(response, 404, { error: "Not found" });
   } catch (error) {
-    const status = error.message === "Request body is too large" ? 413 : 400;
-    return json(response, status, { error: error.message || "Unexpected error" });
+    return json(response, errorStatus(error), { error: clientErrorMessage(error) });
   }
 });
+
+// Distinguishes what the caller got wrong from what failed on our side. Everything used
+// to collapse to 400, which hid real outages behind a client-error status.
+function errorStatus(error) {
+  const message = String(error?.message || "");
+  if (message === "Request body is too large") return 413;
+  if (message === "Request body must be valid JSON") return 400;
+  if (/^Authentication required\.$|^Invalid or expired session\.$/.test(message)) return 401;
+  if (/does not belong to this procurement|not found/i.test(message)) return 404;
+  // A missing credential is an operator problem, not a caller mistake.
+  if (/is not configured/i.test(message)) return 503;
+  if (/is required|must be|invalid|unsupported/i.test(message)) return 400;
+  if (error?.status && Number.isInteger(error.status)) return error.status >= 500 ? 502 : error.status;
+  return 500;
+}
+
+// Upstream provider errors can carry vendor detail that should not be echoed verbatim to
+// an anonymous caller. Known-safe validation messages pass through; anything else is
+// logged server-side and reported generically.
+function clientErrorMessage(error) {
+  const message = String(error?.message || "Unexpected error");
+  const status = errorStatus(error);
+  if (status < 500) return message;
+  console.error("[zitoai] unhandled request error:", message);
+  if (status === 503) return "A required upstream service is not configured. Please try again later.";
+  return "The service could not complete this request. Please try again.";
+}
 
 server.listen(config.port, () => {
   console.log(`ZitoAI running at http://localhost:${config.port}`);
   console.log(`OpenRouter: ${brainStatus().configured ? "configured" : "local fallback"}`);
 });
+
+export default server;
 
 function json(response, status, body, extraHeaders = {}) {
   response.writeHead(status, securityHeaders({
@@ -248,14 +303,38 @@ function redirect(response, location) {
   response.end();
 }
 
+const MAX_BODY_BYTES = 100_000;
+
+// Once the body exceeds the limit the payload is dropped, but the request stream is
+// still drained to a hard ceiling before rejecting. Throwing immediately left the client
+// writing into a socket the server had already finished with, so the caller saw
+// ECONNRESET instead of the 413. The drain ceiling stops that courtesy from becoming an
+// unbounded read.
+const MAX_DRAIN_BYTES = 5_000_000;
+
 async function readJson(request) {
   const chunks = [];
   let bytes = 0;
+  let oversized = false;
+
   for await (const chunk of request) {
     bytes += chunk.length;
-    if (bytes > 100_000) throw new Error("Request body is too large");
+    if (oversized) {
+      if (bytes > MAX_DRAIN_BYTES) {
+        request.destroy();
+        break;
+      }
+      continue;
+    }
+    if (bytes > MAX_BODY_BYTES) {
+      oversized = true;
+      chunks.length = 0;
+      continue;
+    }
     chunks.push(chunk);
   }
+
+  if (oversized) throw new Error("Request body is too large");
   if (!chunks.length) return {};
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -294,4 +373,70 @@ function securityHeaders(headers) {
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "X-Frame-Options": "DENY",
   };
+}
+
+// The A2MCP endpoint is a public, unauthenticated, zero-fee API, so any origin may call
+// it. Nothing here is cookie- or session-authenticated across origins: the Supabase
+// routes take a Bearer token, so credentials are never sent ambiently and
+// Allow-Credentials stays off.
+function corsHeaders(request, headers = {}) {
+  const requested = getHeader(request, "access-control-request-headers");
+  return {
+    ...headers,
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": requested || "Content-Type, Authorization, X-PAYMENT, PAYMENT-SIGNATURE",
+    "Access-Control-Max-Age": "86400",
+    "Access-Control-Expose-Headers": [
+      "PAYMENT-REQUIRED",
+      "PAYMENT-RESPONSE",
+      "WWW-Authenticate",
+      "X-Evidence-SHA256",
+      "Retry-After",
+    ].join(", "),
+  };
+}
+
+function getHeader(request, name) {
+  const value = request.headers?.[name];
+  return Array.isArray(value) ? value.join(", ") : value || "";
+}
+
+// Fixed-window counter keyed by client IP. Deliberately in-process: it is a cost guard
+// for a single Railway instance, not a distributed quota. A shared store would be the
+// next step if this ever runs multi-replica.
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
+const rateLimitMaxRequests = Number(process.env.RATE_LIMIT_MAX_REQUESTS || 30);
+const rateLimitBuckets = new Map();
+
+function checkRateLimit(request) {
+  const now = Date.now();
+  const key = clientIp(request);
+  const bucket = rateLimitBuckets.get(key);
+
+  if (!bucket || now >= bucket.resetAt) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + rateLimitWindowMs });
+    if (rateLimitBuckets.size > 5000) pruneRateLimitBuckets(now);
+    return { ok: true };
+  }
+
+  bucket.count += 1;
+  if (bucket.count > rateLimitMaxRequests) {
+    return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)) };
+  }
+  return { ok: true };
+}
+
+function pruneRateLimitBuckets(now) {
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (now >= bucket.resetAt) rateLimitBuckets.delete(key);
+  }
+}
+
+// Railway and Vercel both terminate TLS upstream, so the socket address is the proxy.
+// The left-most X-Forwarded-For entry is the original client.
+function clientIp(request) {
+  const forwarded = getHeader(request, "x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return request.socket?.remoteAddress || "unknown";
 }

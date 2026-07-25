@@ -88,9 +88,12 @@ The AI layer is intentionally bounded:
 
 - 20 calls per minute
 - 12000 input characters per request
-- deterministic fallback when OpenRouter is unavailable
+- 25 USD cumulative spend per process, overridable with `OPENROUTER_MAX_SPEND_USD`
+- deterministic fallback when OpenRouter is unavailable, rate limited, or over budget
 
-There is no hardcoded dollar spend cap in the application because spend is managed at the OpenRouter key level.
+The spend ceiling is a defence-in-depth guard on top of the limit set at the OpenRouter key level. It applies per process and resets on restart, so it bounds a runaway loop rather than acting as a billing period cap. Reaching it degrades the service to the local parser; it never fails a request.
+
+Search routes are additionally rate limited to 30 requests per minute per client IP, returning `429` with `Retry-After`.
 
 ## Testing checklist
 
@@ -144,6 +147,16 @@ Current multilingual behavior:
 - The backend stores `originalQuery`, `sourceLanguage`, `translated`, and provider-ready English `query` in the normalized brief.
 - Local fallback includes basic support for Nigerian Pidgin, Yoruba, Igbo and Hausa media cues when OpenRouter is unavailable.
 - The frontend shows the detected language, provider search query and original request when they differ.
+
+Verified end to end after the structured-output fix:
+
+| Request | Source language | Provider query | Result |
+|---|---|---|---|
+| `mo nilo orin ayeye ojo ibi` | Yoruba | `birthday celebration music` | Jamendo — "Birthday Celebration" |
+| `我需要生日快乐的音乐` | Chinese | `Happy birthday music` | Jamendo — "Happy Birthday" |
+| `ina bukatar wakar bikin haihuwa` | Hausa | `birthday celebration music` | Jamendo |
+| `a photo of a window at sunset` | English | `window sunset` | Shutterstock |
+| `rain ambience for meditation` | English | unchanged | Freesound |
 
 Latest x402 reviewer fix:
 
