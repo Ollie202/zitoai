@@ -72,8 +72,6 @@ The listed price is `0 USDT`. The endpoint gates on the presence of a payment pr
 | Provider queries per search | 4 candidates, retried only on the primary | Returns the first response rather than repeating it |
 | Model failure | Cross-provider fallback model | Retries on the other provider, then the local parser |
 
-Spend accounting is persisted to Supabase and restored at startup, so the ceiling survives a deploy. Rate limiting is in-memory by default because the service runs a single replica; a shared Postgres limiter is available behind `USAGE_SHARED_RATE_LIMIT` for multi-replica deployments.
-
 ## Downloads
 
 Jamendo's own download URL returns a valid MP3 with `Content-Type: text/html`, so any client that trusts the header renders binary audio as a web page. Music results therefore expose `mediaUrl` as a ZitoAI route that re-serves the same bytes as `audio/mpeg`:

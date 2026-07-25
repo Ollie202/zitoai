@@ -159,16 +159,6 @@ The model can improve interpretation and ranking. It cannot override provider po
 | Request body size | 100 KB | `413`, with the remaining upload drained so the response is delivered cleanly |
 | Provider query candidates per search | 4, retried only on the primary | Returns the first response rather than repeating a known-empty query |
 
-### Durable counters
-
-Guardrail state lives in `public.usage_counters`, written only by the service role. RLS is enabled with no policies, so the anon and authenticated roles have no access at all — these are operational counters, never user data.
-
-**Spend is durable by default.** An in-memory total resets on every deploy, which makes a cumulative ceiling meaningless: the service would hand itself a fresh $25 budget on each release. The running total is now persisted through an atomic `add_usage_counter` and restored at startup. Writes happen after the model response is already in hand and are never awaited, so a storage failure costs accounting accuracy rather than the user's request.
-
-**Rate limiting stays in memory by default.** The service runs a single replica, where the local window is both correct and faster than a database round trip on every request. A shared Postgres limiter is implemented and tested behind `USAGE_SHARED_RATE_LIMIT`; enable it when running more than one instance.
-
-When the shared limiter is enabled it is authoritative, because it sees every replica, but the in-memory window is still consulted. If the shared store is unreachable the request falls back to the local decision — deliberately neither failing open, which would remove the limit during an outage, nor failing closed, which would take the service down with the database.
-
 The A2MCP endpoint sets permissive CORS on every response including the `402`, and answers `OPTIONS` preflight with `204` before the payment gate, so browser-based agents can read the challenge.
 
 ## Storage and evidence
