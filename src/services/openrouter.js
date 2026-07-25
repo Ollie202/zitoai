@@ -137,6 +137,8 @@ export async function normalizeBrief(input) {
               "Return English keywords only. Keep the user's original wording out of translated_query unless it is already useful English.",
               "Set usage_rights to personal unless the request clearly signals business use: advertising, marketing, a client or brand campaign, a monetised channel, broadcast, or resale.",
               "A private, family, or hobby request is personal even when it names an occasion such as a birthday or wedding.",
+              "languageHint is a deterministic guess from the caller's own detector. Prefer it when the request is short or the language is easy to confuse, and override it only when the text clearly says otherwise.",
+              "Translate the meaning, not the individual words. In Hausa, bikin haihuwa is a birthday celebration and bikin aure is a wedding; in Yoruba, ayeye ojo ibi is a birthday.",
               "Do not decide licensing eligibility. Return only JSON that matches the schema.",
             ].join(" "),
         },
@@ -144,6 +146,7 @@ export async function normalizeBrief(input) {
           role: "user",
           content: JSON.stringify({
             query: request.query || "",
+            languageHint: local.sourceLanguage === "Unknown" ? null : local.sourceLanguage,
             assetTypeHint: request.assetType || null,
             intendedUse: request.intendedUse || null,
             commercial: request.commercial ?? null,

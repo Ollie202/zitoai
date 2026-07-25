@@ -74,6 +74,65 @@ test("the parse_brief schema types every enum property", async () => {
   }
 });
 
+// Short Nigerian-language requests were being mislabelled by the model — Hausa read as
+// Yoruba, and "bikin haihuwa" (birthday) translated as "wedding". The local detector
+// gets these right deterministically, so its verdict is passed to the model as a hint.
+test("the locally detected language is sent to the model as a hint", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousKey = config.openRouter.apiKey;
+  config.openRouter.apiKey = "test-openrouter-key";
+  let userMessage = null;
+
+  globalThis.fetch = async (_url, options = {}) => {
+    const sent = JSON.parse(options.body);
+    userMessage = JSON.parse(sent.messages[1].content);
+    return new Response(JSON.stringify({
+      model: "test-model",
+      choices: [{ message: { content: JSON.stringify({
+        asset_type: "music",
+        usage_rights: "personal",
+        source_language: "Hausa",
+        translated_query: "birthday music",
+        keywords: ["birthday"],
+        mood: null,
+        max_price: null,
+        format_constraints: null,
+      }) } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    await normalizeBrief({ query: "ina bukatar wakar bikin haihuwa" });
+    assert.equal(userMessage.languageHint, "Hausa", "the model must receive the local detector's verdict");
+  } finally {
+    globalThis.fetch = previousFetch;
+    config.openRouter.apiKey = previousKey;
+  }
+});
+
+test("an undetectable language sends no hint rather than a wrong one", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousKey = config.openRouter.apiKey;
+  config.openRouter.apiKey = "test-openrouter-key";
+  let userMessage = null;
+
+  globalThis.fetch = async (_url, options = {}) => {
+    userMessage = JSON.parse(JSON.parse(options.body).messages[1].content);
+    return new Response(JSON.stringify({
+      model: "test-model",
+      choices: [{ message: { content: "{}" } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  try {
+    await normalizeBrief({ query: "upbeat music for a product launch" });
+    assert.equal(userMessage.languageHint, null, "an Unknown detection must not be passed as a hint");
+  } finally {
+    globalThis.fetch = previousFetch;
+    config.openRouter.apiKey = previousKey;
+  }
+});
+
 // "ad" was matched as a substring, so sad, shadow, radio, adventure, loading and
 // gradient all classified ordinary personal searches as commercial. That narrowed the
 // Jamendo query to pro-licensed catalogue only.
