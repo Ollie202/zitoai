@@ -285,8 +285,9 @@ const server = createServer(async (request, response) => {
       return json(response, 201, { evidence: await registerEvidence(request, evidenceMatch[1], await readJson(request)) });
     }
     // Anything landing on the origin root gets pointed at the endpoints that matter,
-    // rather than a page. There is no static file surface behind this.
-    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+    // rather than a page. Only the root itself answers: an .html path has no meaning on
+    // a service with no pages, so it falls through to 404 like any other unknown route.
+    if (request.method === "GET" && url.pathname === "/") {
       return json(response, 200, serviceDescriptor());
     }
 

@@ -187,6 +187,10 @@ test("no URL can reach the filesystem", async () => {
     "/package.json",
     "/src/config.js",
     "/assets/zito-logo.png",
+    // No page paths either — a service with no pages should not answer .html.
+    "/index.html",
+    "/about.html",
+    "/styles.css",
   ];
   for (const path of probes) {
     const response = await fetch(`${base}${path}`);
