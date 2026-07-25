@@ -111,6 +111,10 @@ function timingSafe(a, b) {
   return mismatch === 0;
 }
 
+export function encryptToken(valueToEncrypt) {
+  return encrypt(valueToEncrypt);
+}
+
 function encrypt(valueToEncrypt) {
   const key = createHmac("sha256", config.oauth.tokenEncryptionKey).update("zito-oauth-token-v1").digest();
   const iv = randomBytes(12);

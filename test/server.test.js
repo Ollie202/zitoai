@@ -146,6 +146,35 @@ test("recognised client mistakes keep their precise status", () => {
   assert.equal(clientErrorMessage(new Error("A search query is required.")), "A search query is required.");
 });
 
+// These routes act on ZitoAI's own Shutterstock account. Anonymous access meant any
+// caller could read its subscription state or spend from a paid 500-download allotment.
+test("routes that spend or expose the provider account require a session", async () => {
+  const protectedRoutes = [
+    ["GET", "/api/providers/shutterstock/subscriptions"],
+    ["GET", "/api/providers/shutterstock/licenses"],
+    ["GET", "/api/providers/shutterstock/images/123"],
+    ["POST", "/api/providers/shutterstock/license"],
+    ["POST", "/api/providers/shutterstock/licenses/abc/download"],
+  ];
+
+  for (const [method, path] of protectedRoutes) {
+    const response = await fetch(`${base}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "198.51.100.60" },
+      body: method === "POST" ? JSON.stringify({ imageId: "1", confirmLicense: true }) : undefined,
+    });
+    assert.equal(response.status, 401, `${method} ${path} must reject an anonymous caller`);
+    const body = await response.json();
+    assert.match(body.error, /Authentication required/);
+  }
+});
+
+test("the public taxonomy route stays open", async () => {
+  // Categories are a static taxonomy, not account state, and the UI reads them freely.
+  const response = await fetch(`${base}/api/providers/shutterstock/categories`);
+  assert.notEqual(response.status, 401);
+});
+
 test("static file serving refuses path traversal", async () => {
   for (const path of ["/../package.json", "/..%2fpackage.json", "/%2e%2e/local.env"]) {
     const response = await fetch(`${base}${path}`);

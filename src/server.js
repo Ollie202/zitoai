@@ -24,6 +24,7 @@ import {
   shutterstockStatus,
 } from "./services/shutterstock.js";
 import {
+  authenticatedUser,
   createEvidenceUpload,
   createProcurement,
   getProcurement,
@@ -151,17 +152,31 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/categories") {
       return json(response, 200, await listShutterstockImageCategories());
     }
+    // The routes below act on ZitoAI's own Shutterstock account: they read its
+    // subscription state or spend from its download allotment. Left anonymous, any
+    // caller could drain a paid allotment or read the account's licensing history, so
+    // each one requires a signed-in user.
     if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/subscriptions") {
+      await authenticatedUser(request);
       return json(response, 200, await listShutterstockSubscriptions());
     }
     const shutterstockImageMatch = url.pathname.match(/^\/api\/providers\/shutterstock\/images\/([^/]+)$/i);
     if (request.method === "GET" && shutterstockImageMatch) {
+      await authenticatedUser(request);
       return json(response, 200, await getShutterstockImageDetails(shutterstockImageMatch[1]));
     }
     if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/licenses") {
+      await authenticatedUser(request);
       return json(response, 200, await listShutterstockImageLicenses(Object.fromEntries(url.searchParams)));
     }
     if (request.method === "POST" && url.pathname === "/api/providers/shutterstock/license") {
+      // This one spends real money. Authenticated, and rate limited on top, because a
+      // single signed-in account should not be able to burn the allotment in a loop.
+      await authenticatedUser(request);
+      const limit = await enforceRateLimit(request);
+      if (!limit.ok) {
+        return json(response, 429, { error: "Too many licensing requests. Please retry shortly.", retryAfterSeconds: limit.retryAfterSeconds }, { "Retry-After": String(limit.retryAfterSeconds) });
+      }
       return json(response, 201, { license: await licenseShutterstockImage(await readJson(request)) });
     }
     const freesoundDownloadMatch = url.pathname.match(/^\/api\/providers\/freesound\/sounds\/([0-9]+)\/download$/i);
@@ -173,6 +188,7 @@ const server = createServer(async (request, response) => {
     }
     const shutterstockRedownloadMatch = url.pathname.match(/^\/api\/providers\/shutterstock\/licenses\/([^/]+)\/download$/i);
     if (request.method === "POST" && shutterstockRedownloadMatch) {
+      await authenticatedUser(request);
       return json(response, 201, { download: await redownloadShutterstockImage({ ...(await readJson(request)), licenseId: shutterstockRedownloadMatch[1] }) });
     }
     if (request.method === "GET" && ["/api/agent", "/.well-known/agent.json", "/.well-known/agent-card.json"].includes(url.pathname)) {
@@ -282,6 +298,8 @@ function errorStatus(error) {
   // A missing credential is an operator problem, not a caller mistake.
   if (/is not configured\.?$/i.test(message)) return 503;
   if (/^A search query is required|Track id must be numeric|must be valid JSON|Unsupported OAuth provider/i.test(message)) return 400;
+  // Shutterstock request validation: the caller can fix all of these.
+  if (/^Set confirmLicense=true|^Shutterstock (imageId|customerId|licenseId|price)|^Custom Shutterstock image licenses require|^No active Shutterstock image subscription/i.test(message)) return 400;
   if (error?.status && Number.isInteger(error.status)) return error.status >= 500 ? 502 : error.status;
   return 500;
 }

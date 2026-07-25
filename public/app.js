@@ -22,16 +22,23 @@ form.addEventListener("submit", async (event) => {
   summary.classList.add("hidden");
   results.innerHTML = "";
   const selectedType = $("#asset-type").value;
+  const selectedUse = $("#intended-use").value;
   const payload = {
     query: $("#query").value,
-    intendedUse: $("#intended-use").value,
-    commercial: $("#intended-use").value !== "personal_content",
     territory: "worldwide",
     budgetUsd: $("#budget").value,
     rawAssetRequired: selectedType !== "auto",
     limit: 6,
   };
   if (selectedType !== "auto") payload.assetType = selectedType;
+  // Sending intendedUse overrides the parser's own reading of the brief, so on
+  // auto-detect it is omitted and the request is classified from its wording. Previously
+  // the form always sent a value, and the first option was "commercial" — so every web
+  // search was treated as commercial regardless of what was actually asked for.
+  if (selectedUse !== "auto") {
+    payload.intendedUse = selectedUse;
+    payload.commercial = selectedUse !== "personal_content";
+  }
   try {
     const body = await api("/api/search", { method: "POST", body: payload, auth: false });
     lastSearch = body;
@@ -190,24 +197,24 @@ function card(asset, index) {
   const audioUrl = asset.previewUrl || asset.mediaUrl;
   let preview;
   if (asset.assetType === "image") {
-    preview = asset.previewUrl ? `<img src="${escapeAttribute(asset.previewUrl)}" alt="" loading="lazy">` : "Image preview unavailable";
+    preview = asset.previewUrl ? `<img src="${escapeAttribute(safeUrl(asset.previewUrl))}" alt="" loading="lazy">` : "Image preview unavailable";
   } else if (asset.assetType === "video") {
     preview = asset.mediaUrl
-      ? `<video controls preload="metadata" src="${escapeAttribute(asset.mediaUrl)}" ${asset.previewUrl ? `poster="${escapeAttribute(asset.previewUrl)}"` : ""}></video>`
-      : asset.previewUrl ? `<img src="${escapeAttribute(asset.previewUrl)}" alt="Video thumbnail" loading="lazy">` : "Video preview unavailable";
+      ? `<video controls preload="metadata" src="${escapeAttribute(safeUrl(asset.mediaUrl))}" ${asset.previewUrl ? `poster="${escapeAttribute(safeUrl(asset.previewUrl))}"` : ""}></video>`
+      : asset.previewUrl ? `<img src="${escapeAttribute(safeUrl(asset.previewUrl))}" alt="Video thumbnail" loading="lazy">` : "Video preview unavailable";
   } else {
-    preview = audioUrl ? `<audio controls preload="metadata" src="${escapeAttribute(audioUrl)}"></audio>` : "Audio preview unavailable";
+    preview = audioUrl ? `<audio controls preload="metadata" src="${escapeAttribute(safeUrl(audioUrl))}"></audio>` : "Audio preview unavailable";
   }
   const warnings = (asset.policy?.warnings || []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   const price = asset.priceUsd == null ? "Provider price" : asset.priceUsd === 0 ? "No API charge" : `$${asset.priceUsd}`;
-  const source = asset.sourceUrl ? `<a href="${escapeAttribute(asset.sourceUrl)}" target="_blank" rel="noreferrer">Original source</a>` : "";
-  const license = asset.license?.url ? `<a href="${escapeAttribute(asset.license.url)}" target="_blank" rel="noreferrer">License terms</a>` : "";
+  const source = asset.sourceUrl ? `<a href="${escapeAttribute(safeUrl(asset.sourceUrl))}" target="_blank" rel="noreferrer">Original source</a>` : "";
+  const license = asset.license?.url ? `<a href="${escapeAttribute(safeUrl(asset.license.url))}" target="_blank" rel="noreferrer">License terms</a>` : "";
   const checkout = shouldShowCheckout(asset)
-    ? `<a class="checkout-link" href="${escapeAttribute(asset.purchaseUrl || asset.sourceUrl)}" target="_blank" rel="noreferrer">Provider licensing step</a>`
+    ? `<a class="checkout-link" href="${escapeAttribute(safeUrl(asset.purchaseUrl || asset.sourceUrl))}" target="_blank" rel="noreferrer">Provider licensing step</a>`
     : "";
   const verdict = asset.policy?.verdict || "review";
   const selectDisabled = verdict === "rejected" ? "disabled" : "";
-  return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${verdict}">${escapeHtml(statusLabel(verdict))}</span><p class="policy-summary">${escapeHtml(asset.policy?.summary || "Review provider terms before using this asset.")}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}${checkout}<button class="select-button" data-select="${index}" ${selectDisabled}>Document evidence</button></div></div></article>`;
+  return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${escapeAttribute(verdict)}">${escapeHtml(statusLabel(verdict))}</span><p class="policy-summary">${escapeHtml(asset.policy?.summary || "Review provider terms before using this asset.")}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}${checkout}<button class="select-button" data-select="${index}" ${selectDisabled}>Document evidence</button></div></div></article>`;
 }
 
 function shouldShowCheckout(asset) {
@@ -247,6 +254,12 @@ async function licenseSelectedShutterstockImage() {
     output.textContent = "Confirm the evidence statement before creating a real Shutterstock license.";
     return;
   }
+  // Licensing spends from ZitoAI's paid Shutterstock allotment, so it is a signed-in
+  // action. Checked here to give a clear prompt rather than a bare 401 from the API.
+  if (!getSession()) {
+    output.textContent = "Sign in to create a Shutterstock license. Licensing draws on a paid download allotment, so it is tied to an account.";
+    return;
+  }
   const customerId = $("#evidence-customer").value.trim() || "zito-customer";
   output.textContent = "Creating Shutterstock image license...";
   try {
@@ -258,7 +271,6 @@ async function licenseSelectedShutterstockImage() {
         price: $("#evidence-amount").value === "" ? 0 : Number($("#evidence-amount").value),
         confirmLicense: true,
       },
-      auth: false,
     });
     const licensed = body.license;
     selectedAsset.mediaUrl = licensed.downloadUrl;
@@ -458,3 +470,17 @@ function publicProviderLabel(provider) {
 }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]); }
 function escapeAttribute(value) { return escapeHtml(value); }
+
+// Escaping stops an attribute breakout but not a javascript: or data: URL, and these
+// values come from third-party catalogues where titles and links are user-submitted.
+// Anything that is not plain http(s) is dropped rather than rendered as a link.
+function safeUrl(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, location.origin);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";
+  } catch {
+    return "";
+  }
+}

@@ -1,7 +1,6 @@
-import { createCipheriv, createHmac, randomBytes } from "node:crypto";
 import { config } from "../config.js";
 import { fetchJson } from "../lib/http.js";
-import { decryptToken } from "./oauth.js";
+import { decryptToken, encryptToken } from "./oauth.js";
 import { getProviderConnection, saveProviderConnection, authenticatedUser } from "./supabase.js";
 
 const API_BASE = "https://freesound.org/apiv2";
@@ -98,20 +97,15 @@ async function getValidOAuthAccessToken(request) {
     providerAccountId: connection.provider_account_id || null,
     accountLabel: connection.account_label || null,
     scopes: String(token.scope || connection.scopes || "").split(/[ ,]+/).filter(Boolean),
-    accessTokenCiphertext: encryptLike(connection.access_token_ciphertext, token.access_token),
-    refreshTokenCiphertext: token.refresh_token ? encryptLike(connection.refresh_token_ciphertext, token.refresh_token) : connection.refresh_token_ciphertext,
+    accessTokenCiphertext: encryptToken(token.access_token),
+    refreshTokenCiphertext: token.refresh_token ? encryptToken(token.refresh_token) : connection.refresh_token_ciphertext,
     expiresAt: newExpiresAt,
     metadata: { ...(connection.metadata || {}), tokenType: token.token_type || "Bearer", refreshedAt: new Date().toISOString() },
   });
   return token.access_token;
 }
 
-function encryptLike(ciphertextSample, value) {
-  const [version, ivValue, authTagValue] = String(ciphertextSample || "").split(":");
-  if (!version || !ivValue || !authTagValue) return ciphertextSample;
-  const key = createHmac("sha256", config.oauth.tokenEncryptionKey).update("zito-oauth-token-v1").digest();
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const ciphertext = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
-  return `v1:${iv.toString("base64url")}:${cipher.getAuthTag().toString("base64url")}:${ciphertext.toString("base64url")}`;
-}
+// Token encryption lives in one place, in oauth.js. This module previously carried its
+// own copy that inspected the existing ciphertext to decide whether to encrypt at all,
+// and returned the *old* ciphertext when that check failed — persisting a stale token as
+// though it were the refreshed one.
