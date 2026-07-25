@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import PDFDocument from "pdfkit";
 import { config } from "../config.js";
 
-const logoPath = join(fileURLToPath(new URL("../../public", import.meta.url)), "assets", "zito-logo.png");
+// Lives outside any served directory: this is a build asset for the PDF, not something
+// the service hands out over HTTP.
+const logoPath = join(fileURLToPath(new URL("../../assets", import.meta.url)), "zito-logo.png");
 
 export function buildEvidenceManifest(input = {}) {
   input = input && typeof input === "object" && !Array.isArray(input) ? input : {};

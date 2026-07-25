@@ -175,13 +175,56 @@ test("the public taxonomy route stays open", async () => {
   assert.notEqual(response.status, 401);
 });
 
-test("static file serving refuses path traversal", async () => {
-  for (const path of ["/../package.json", "/..%2fpackage.json", "/%2e%2e/local.env"]) {
+// The service is an ASP, not a website. With static serving removed there is no
+// filesystem read reachable from a URL at all, which is a stronger guarantee than the
+// traversal check that used to guard it.
+test("no URL can reach the filesystem", async () => {
+  const probes = [
+    "/../package.json",
+    "/..%2fpackage.json",
+    "/%2e%2e/local.env",
+    "/local.env",
+    "/package.json",
+    "/src/config.js",
+    "/assets/zito-logo.png",
+  ];
+  for (const path of probes) {
     const response = await fetch(`${base}${path}`);
-    assert.ok(response.status === 403 || response.status === 404, `${path} must not be served (got ${response.status})`);
+    assert.equal(response.status, 404, `${path} must not be served (got ${response.status})`);
     const text = await response.text();
-    assert.doesNotMatch(text, /OPENROUTER_API_KEY|"dependencies"/, `${path} leaked file contents`);
+    assert.doesNotMatch(text, /OPENROUTER_API_KEY|"dependencies"|SUPABASE/, `${path} leaked file contents`);
   }
+});
+
+test("the root returns a service descriptor, not a page", async () => {
+  const response = await fetch(`${base}/`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /application\/json/, "an ASP root must not serve HTML");
+
+  const body = await response.json();
+  assert.equal(body.role, "ASP");
+  assert.equal(body.protocol, "A2MCP");
+  assert.match(body.endpoints.mediaSearch, /\/api\/a2mcp\/media-search$/);
+  assert.match(body.endpoints.agentCard, /\/\.well-known\/agent\.json$/);
+  assert.match(body.endpoints.manifest, /\/\.well-known\/a2mcp\.json$/);
+  assert.ok(body.payment.price, "the descriptor states the price");
+});
+
+test("the endpoints the marketplace depends on all still answer", async () => {
+  // Health check, agent card, A2MCP manifest and the media-search endpoint are the
+  // surface OKX.AI actually uses. Removing the website must not touch any of them.
+  assert.equal((await fetch(`${base}/api/health`)).status, 200);
+  assert.equal((await fetch(`${base}/.well-known/agent.json`)).status, 200);
+  assert.equal((await fetch(`${base}/.well-known/a2mcp.json`)).status, 200);
+  assert.equal((await fetch(`${base}/api/a2mcp/media-search`)).status, 402);
+});
+
+test("the browser bootstrap endpoint is gone", async () => {
+  // /api/config existed only to hand the Supabase URL and anon key to the page.
+  const response = await fetch(`${base}/api/config`);
+  assert.equal(response.status, 404);
+  const text = await response.text();
+  assert.doesNotMatch(text, /anonKey|supabase\.co/i, "no key material may be published here");
 });
 
 test("health reports the models actually in use", async () => {

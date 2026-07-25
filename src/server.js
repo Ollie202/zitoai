@@ -1,7 +1,4 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { extname, isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
@@ -35,15 +32,27 @@ import {
   storageStatus,
 } from "./services/supabase.js";
 
-const root = fileURLToPath(new URL("../public", import.meta.url));
-const mime = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".webmanifest": "application/manifest+json; charset=utf-8",
-};
+// ZitoAI is an ASP on OKX.AI, not a website. The origin serves the A2MCP endpoint, the
+// agent card and the manifest — nothing else. Root answers with a machine-readable
+// descriptor so an agent landing here is pointed at the right places, and there is no
+// static file surface to secure, cache or keep in sync.
+const serviceDescriptor = () => ({
+  service: "zitoai",
+  role: "ASP",
+  protocol: "A2MCP",
+  description: "Rights-aware media search. Finds licensable images, sound effects, music tracks and ambience, and returns them with the licensing metadata an agent needs to act.",
+  endpoints: {
+    mediaSearch: `${config.aspBaseUrl.replace(/\/+$/, "")}/api/a2mcp/media-search`,
+    agentCard: `${config.aspBaseUrl.replace(/\/+$/, "")}/.well-known/agent.json`,
+    manifest: `${config.aspBaseUrl.replace(/\/+$/, "")}/.well-known/a2mcp.json`,
+    health: `${config.aspBaseUrl.replace(/\/+$/, "")}/api/health`,
+  },
+  payment: {
+    protocol: "OKX Agent Payments Protocol",
+    price: paymentStatus().price,
+    note: "Unpaid requests receive a 402 challenge. Complete the pay-and-replay handshake, then POST the request again.",
+  },
+});
 
 const agentCard = {
   name: "ZitoAI",
@@ -111,16 +120,9 @@ const server = createServer(async (request, response) => {
         payment: paymentStatus(),
       });
     }
-    if (request.method === "GET" && url.pathname === "/api/config") {
-      return json(response, 200, {
-        supabase: {
-          configured: storageStatus().configured,
-          url: config.supabase.url || null,
-          anonKey: config.supabase.anonKey || null,
-        },
-        oauth: { callbackBaseUrl: config.oauth?.callbackBaseUrl || config.openRouter.siteUrl },
-      });
-    }
+    // /api/config is gone with the browser UI. It existed only to hand the Supabase URL
+    // and anon key to a page that no longer exists, and an endpoint that publishes keys
+    // to nobody is surface without a purpose.
     if (request.method === "GET" && url.pathname === "/api/providers") {
       return json(response, 200, { providers: publicProviderInfo() });
     }
@@ -239,13 +241,25 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && oauthStartMatch) {
       return json(response, 200, await startOAuth(request, oauthStartMatch[1]));
     }
+    // The provider redirects a browser here at the end of its consent flow, so this one
+    // route is reached by a human. It answers with JSON rather than bouncing to a static
+    // page, because there is no longer a page to bounce to.
     const oauthCallbackMatch = url.pathname.match(/^\/auth\/([a-z0-9_-]+)\/callback$/i);
     if (request.method === "GET" && oauthCallbackMatch) {
       try {
         const result = await completeOAuth(oauthCallbackMatch[1], Object.fromEntries(url.searchParams));
-        return redirect(response, `/oauth-callback.html?provider=${encodeURIComponent(result.provider)}`);
+        return json(response, 200, {
+          ok: true,
+          provider: result.provider,
+          expiresAt: result.expiresAt,
+          message: `${result.provider} account connected. You can close this window.`,
+        });
       } catch (error) {
-        return redirect(response, `/oauth-callback.html?error=${encodeURIComponent(error.message)}`);
+        return json(response, 400, {
+          ok: false,
+          error: error.message,
+          message: "The provider connection could not be completed. You can close this window and try again.",
+        });
       }
     }
     if (request.method === "GET" && url.pathname === "/api/procurements") {
@@ -270,7 +284,11 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && evidenceMatch) {
       return json(response, 201, { evidence: await registerEvidence(request, evidenceMatch[1], await readJson(request)) });
     }
-    if (request.method === "GET") return await serveStatic(url.pathname, response);
+    // Anything landing on the origin root gets pointed at the endpoints that matter,
+    // rather than a page. There is no static file surface behind this.
+    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+      return json(response, 200, serviceDescriptor());
+    }
 
     return json(response, 404, { error: "Not found" });
   } catch (error) {
@@ -397,11 +415,6 @@ function binary(response, status, body, contentType, fileName, hash) {
   response.end(body);
 }
 
-function redirect(response, location) {
-  response.writeHead(302, securityHeaders({ Location: location, "Cache-Control": "no-store" }));
-  response.end();
-}
-
 const MAX_BODY_BYTES = 100_000;
 
 // Once the body exceeds the limit the payload is dropped, but the request stream is
@@ -442,28 +455,9 @@ async function readJson(request) {
   }
 }
 
-async function serveStatic(pathname, response) {
-  let decoded;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    return json(response, 400, { error: "Invalid path" });
-  }
-  const requested = decoded === "/" ? "index.html" : decoded.replace(/^[/\\]+/, "");
-  const path = resolve(root, requested);
-  const fromRoot = relative(root, path);
-  if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) return json(response, 403, { error: "Forbidden" });
-  try {
-    const content = await readFile(path);
-    response.writeHead(200, securityHeaders({
-      "Content-Type": mime[extname(path)] || "application/octet-stream",
-      "Cache-Control": "no-cache",
-    }));
-    response.end(content);
-  } catch {
-    json(response, 404, { error: "Not found" });
-  }
-}
+// Static file serving is gone along with the browser UI. Removing it also removes the
+// path-traversal surface that came with it: there is no filesystem read reachable from a
+// URL any more.
 
 function securityHeaders(headers) {
   return {

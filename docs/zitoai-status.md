@@ -8,8 +8,8 @@ ZitoAI is a zero-fee OKX.AI ASP and A2MCP API service for rights-aware media sea
 
 | Item | Status |
 |---|---|
-| Public origin | Live at https://asp.zitoai.xyz — one host serving the A2MCP endpoint, agent card, manifest and browser UI |
-| ASP base | Live at https://asp.zitoai.xyz |
+| ASP base | Live at https://asp.zitoai.xyz — API only, no website. Serves the A2MCP endpoint, agent card, manifest and health check |
+| Agent card | Live at https://asp.zitoai.xyz/.well-known/agent.json |
 | A2MCP manifest | Live at https://asp.zitoai.xyz/.well-known/a2mcp.json |
 | Primary service endpoint | `POST https://asp.zitoai.xyz/api/a2mcp/media-search` |
 | Pricing mode | Zero-fee x402 |
@@ -146,7 +146,7 @@ Current multilingual behavior:
 - OpenRouter/Gemini parses incoming language, usage, mood, keywords and media type.
 - The backend stores `originalQuery`, `sourceLanguage`, `translated`, and provider-ready English `query` in the normalized brief.
 - Local fallback includes basic support for Nigerian Pidgin, Yoruba, Igbo and Hausa media cues when OpenRouter is unavailable.
-- The frontend shows the detected language, provider search query and original request when they differ.
+- Responses carry the detected language, the provider search query and the original request, so a caller can show all three when they differ.
 
 Verified end to end after the structured-output fix:
 

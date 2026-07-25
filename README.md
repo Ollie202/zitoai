@@ -20,13 +20,13 @@ If the model layer is unavailable, rate limited, or over budget, the service fal
 
 | Surface | URL |
 |---|---|
-| ASP base and website | https://asp.zitoai.xyz |
+| ASP base | https://asp.zitoai.xyz |
 | Health check | https://asp.zitoai.xyz/api/health |
 | Agent card | https://asp.zitoai.xyz/.well-known/agent.json |
 | A2MCP manifest | https://asp.zitoai.xyz/.well-known/a2mcp.json |
 | A2MCP media search | `POST https://asp.zitoai.xyz/api/a2mcp/media-search` |
 
-One origin serves everything: the A2MCP endpoint, the agent card and manifest, and the browser UI. There is no separate web host to keep in sync, and no second URL that can go stale while the service itself is healthy.
+ZitoAI is an ASP on the OKX.AI marketplace, not a website. There is no browser UI and no static file surface — the base URL returns a JSON service descriptor pointing at the endpoints above. Agents are the only intended callers, and the marketplace listing is the only front door.
 
 ## Active providers
 
@@ -93,7 +93,7 @@ The route accepts only a numeric track id and builds the upstream URL itself, so
 
 Requirements:
 
-- Node.js 20 or newer
+- Node.js 22 or newer — `@supabase/supabase-js` needs a native WebSocket, which older runtimes do not provide
 - Provider credentials in `local.env` or `.env`
 
 Install and run:
@@ -104,7 +104,17 @@ npm test
 npm start
 ```
 
-Open `http://localhost:3000`.
+There is no page to open. Check the service is up with:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+and call it the way an agent would:
+
+```bash
+curl -X POST http://localhost:3000/api/search -H "Content-Type: application/json" -d "{\"query\":\"happy birthday music\"}"
+```
 
 The app loads `local.env` first, then `.env`, then process environment variables. Do not commit real secrets.
 
@@ -134,7 +144,7 @@ See [API key setup](docs/API-KEYS.md) for exact provider links and scopes.
 ## Project structure
 
 ```text
-public/                 Static website, browser UI, legal pages, logo assets
+assets/                 Logo used when rendering Evidence Pack PDFs
 src/
   core/                 Brief parsing, routing, policy logic
   lib/                  Shared HTTP helpers

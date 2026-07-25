@@ -47,7 +47,7 @@ A2MCP response with results, scopes, license metadata, previews and next step
 | `GET` | `/api/health` | Runtime status for brain, storage, OAuth and payment mode |
 | `GET` | `/.well-known/a2mcp.json` | OKX.AI A2MCP service manifest |
 | `GET` or `POST` | `/api/a2mcp/media-search` | Primary ASP endpoint for agents. Unpaid requests return a 402 challenge. Replayed POST requests return results |
-| `POST` | `/api/search` | Browser search endpoint |
+| `POST` | `/api/search` | Unpaid search endpoint, same pipeline as the A2MCP route |
 | `POST` | `/api/brief` | Brief normalization endpoint |
 | `GET` | `/api/providers` | Provider configuration status |
 | `POST` | `/api/evidence-pack` | JSON or PDF evidence export |
