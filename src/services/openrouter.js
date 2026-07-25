@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { normalizeBriefLocally } from "../core/brief.js";
 import { fetchJson } from "../lib/http.js";
+import { readPersistedSpendUsd, recordSpendUsd } from "./usage-store.js";
 
 const DEFAULT_PARSE_BRIEF_MODEL = "google/gemini-2.5-flash-lite";
 const DEFAULT_RANK_RESULTS_MODEL = "openai/gpt-4o-mini";
@@ -13,7 +14,27 @@ const openRouterUsage = {
   estimatedSpendUsd: 0,
   calls: [],
   events: [],
+  spendRestored: false,
 };
+
+// Loads the persisted spend total once, so a redeploy resumes the running total instead
+// of handing out a fresh budget. Called at startup; safe to call more than once.
+export async function restoreSpendFromStore() {
+  if (openRouterUsage.spendRestored) return openRouterUsage.estimatedSpendUsd;
+  const persisted = await readPersistedSpendUsd();
+  if (persisted != null && persisted > openRouterUsage.estimatedSpendUsd) {
+    openRouterUsage.estimatedSpendUsd = persisted;
+  }
+  openRouterUsage.spendRestored = true;
+  return openRouterUsage.estimatedSpendUsd;
+}
+
+// Test seam: lets a test reset accumulated spend between cases.
+export function __resetSpendForTests() {
+  openRouterUsage.estimatedSpendUsd = 0;
+  openRouterUsage.spendRestored = false;
+  openRouterUsage.calls.length = 0;
+}
 
 // Every property carries an explicit `type`. Enum-only properties are not valid under
 // strict structured outputs: providers that enforce `strict: true` satisfy `required`
@@ -426,7 +447,17 @@ function canCallOpenRouter(functionName, input) {
 
 function recordOpenRouterUsage(functionName, model, body, startedAt) {
   const cost = Number(body?.usage?.cost || 0);
-  if (Number.isFinite(cost) && cost > 0) openRouterUsage.estimatedSpendUsd += cost;
+  if (Number.isFinite(cost) && cost > 0) {
+    openRouterUsage.estimatedSpendUsd += cost;
+    // Persisted after the response is already in hand, and never awaited: the ceiling is
+    // a guardrail, so a storage failure must cost accuracy rather than the request.
+    recordSpendUsd(cost).then((total) => {
+      if (total != null && total > openRouterUsage.estimatedSpendUsd) {
+        // Another replica has spent more than this process knows about.
+        openRouterUsage.estimatedSpendUsd = total;
+      }
+    }).catch(() => {});
+  }
   const event = {
     at: new Date().toISOString(),
     functionName,
