@@ -47,11 +47,18 @@ const PARSE_BRIEF_SCHEMA = {
     source_language: { type: "string" },
     translated_query: { type: "string" },
     keywords: { type: "array", items: { type: "string" } },
+    // The concepts a result must actually convey to count as a match. Checked against
+    // what the provider returns, so an off-target catalogue result is labelled rather
+    // than presented as a match.
+    core_concepts: { type: "array", items: { type: "string" } },
+    // Different ways to ask the same thing. A catalogue that has nothing for one
+    // phrasing often has good results for another.
+    alternate_queries: { type: "array", items: { type: "string" } },
     mood: { type: ["string", "null"] },
     max_price: { type: ["number", "null"] },
     format_constraints: { type: ["string", "null"] },
   },
-  required: ["asset_type", "usage_rights", "source_language", "translated_query", "keywords", "mood", "max_price", "format_constraints"],
+  required: ["asset_type", "usage_rights", "source_language", "translated_query", "keywords", "core_concepts", "alternate_queries", "mood", "max_price", "format_constraints"],
   additionalProperties: false,
 };
 
@@ -186,6 +193,8 @@ export async function normalizeBrief(input) {
               "A private, family, or hobby request is personal even when it names an occasion such as a birthday or wedding.",
               "languageHint is a deterministic guess from the caller's own detector. Prefer it when the request is short or the language is easy to confuse, and override it only when the text clearly says otherwise.",
               "Translate the meaning, not the individual words. In Hausa, bikin haihuwa is a birthday celebration and bikin aure is a wedding; in Yoruba, ayeye ojo ibi is a birthday.",
+              "Set core_concepts to the two to four English ideas a result must actually be about for it to count as a match. Use the subject matter, occasion, mood or setting. Never include the media type itself, so not music, song, image, photo or sound.",
+              "Set alternate_queries to two or three differently worded English searches for the same intent, for when a catalogue has nothing under the first phrasing. Vary the vocabulary rather than reordering the same words: for a birthday request try celebration, party, and happy birthday.",
               "Do not decide licensing eligibility. Return only JSON that matches the schema.",
             ].join(" "),
         },
@@ -371,6 +380,10 @@ function buildBriefResult(attempt, local, input) {
     broadcast: input.broadcast === true || usageRights === "broadcast",
     budgetUsd: input.budgetUsd ?? validated.max_price ?? local.budgetUsd,
     keywords: mergeKeywords(validated.keywords, local.keywords),
+    // Falls back to concepts derived locally from the request, so relevance checking
+    // still works when the model returns nothing usable here.
+    coreConcepts: validated.core_concepts.length ? validated.core_concepts : local.coreConcepts,
+    alternateQueries: validated.alternate_queries,
   };
   return {
     brief,
@@ -403,10 +416,31 @@ function validateParsedBrief(parsed) {
     source_language: oneLine(parsed.source_language || "Unknown"),
     translated_query: oneLine(parsed.translated_query || ""),
     keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(String).filter(Boolean).slice(0, 12) : [],
+    core_concepts: cleanStringList(parsed.core_concepts, 4),
+    alternate_queries: cleanStringList(parsed.alternate_queries, 3),
     mood: parsed.mood == null ? null : String(parsed.mood),
     max_price: parsed.max_price == null ? null : Number(parsed.max_price),
     format_constraints: parsed.format_constraints == null ? null : String(parsed.format_constraints),
   };
+}
+
+// Lowercased, de-duplicated, length-capped. The model occasionally returns the media
+// type as a concept despite being told not to; those are dropped here because every
+// result in a lane satisfies them, so matching on them proves nothing.
+const NON_CONCEPT_WORDS = new Set([
+  "music", "song", "songs", "track", "tracks", "audio", "sound", "sounds", "sfx",
+  "image", "images", "photo", "photos", "picture", "pictures", "video", "media",
+]);
+
+function cleanStringList(value, limit) {
+  if (!Array.isArray(value)) return [];
+  const cleaned = [];
+  for (const item of value) {
+    const text = oneLine(item).toLowerCase();
+    if (!text || NON_CONCEPT_WORDS.has(text) || cleaned.includes(text)) continue;
+    cleaned.push(text);
+  }
+  return cleaned.slice(0, limit);
 }
 
 function validateRanking(parsed, candidates) {

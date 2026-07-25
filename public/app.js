@@ -180,17 +180,28 @@ function render(body) {
   const originalQuery = body.brief.originalQuery && body.brief.originalQuery !== providerQuery
     ? `<span>Original: ${escapeHtml(body.brief.originalQuery)}</span>`
     : "";
+  // Shown when the first phrasing found nothing and a reworded search did better, so the
+  // provider query on screen matches what actually produced these results.
+  const retried = body.processing?.usedAlternateQuery
+    ? `<span>Reworded the search to find a match</span>`
+    : "";
   summary.innerHTML = `
     <strong>${body.count} result${body.count === 1 ? "" : "s"} · ${recommended} selected first · ${body.brief.commercial ? "commercial" : "personal"} use</strong>
     <span>Language: ${escapeHtml(language)}</span>
     <span>Provider search: ${escapeHtml(providerQuery)}</span>
     ${originalQuery}
+    ${retried}
   `;
   if (!body.results.length) {
     results.innerHTML = '<div class="notice">No provider returned a strong match. Try a broader brief, remove extra constraints, or choose a specific media type.</div>';
     return;
   }
-  results.innerHTML = body.results.map(card).join("");
+  // States plainly when the catalogue had nothing matching, rather than letting the
+  // closest available result read as an answer to the brief.
+  const notice = body.matchQuality?.notice
+    ? `<div class="notice">${escapeHtml(body.matchQuality.notice)}</div>`
+    : "";
+  results.innerHTML = notice + body.results.map(card).join("");
 }
 
 function card(asset, index) {
@@ -214,7 +225,14 @@ function card(asset, index) {
     : "";
   const verdict = asset.policy?.verdict || "review";
   const selectDisabled = verdict === "rejected" ? "disabled" : "";
-  return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${escapeAttribute(verdict)}">${escapeHtml(statusLabel(verdict))}</span><p class="policy-summary">${escapeHtml(asset.policy?.summary || "Review provider terms before using this asset.")}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}${checkout}<button class="select-button" data-select="${index}" ${selectDisabled}>Document evidence</button></div></div></article>`;
+  // A licensing verdict says whether an asset may be used, not whether it is what was
+  // asked for. Both are shown, so a permissively licensed but off-target result cannot
+  // read as a match.
+  const matchLabels = { strong: "Matches your brief", partial: "Partial match", weak: "May not match your brief" };
+  const matchBadge = asset.relevance && matchLabels[asset.relevance.strength]
+    ? `<span class="badge match-${escapeAttribute(asset.relevance.strength)}">${escapeHtml(matchLabels[asset.relevance.strength])}</span>`
+    : "";
+  return `<article class="card"><div class="preview">${preview}</div><div class="card-body"><div class="card-top"><div><div class="provider">${escapeHtml(label(asset.provider))}</div><h3>${escapeHtml(asset.title)}</h3><p class="creator">${escapeHtml(asset.creator || "Unknown creator")}</p></div><div class="price">${escapeHtml(price)}</div></div><span class="badge ${escapeAttribute(verdict)}">${escapeHtml(statusLabel(verdict))}</span>${matchBadge}<p class="policy-summary">${escapeHtml(asset.policy?.summary || "Review provider terms before using this asset.")}</p><ul class="warnings">${warnings}</ul><div class="actions">${source}${license}${checkout}<button class="select-button" data-select="${index}" ${selectDisabled}>Document evidence</button></div></div></article>`;
 }
 
 function shouldShowCheckout(asset) {

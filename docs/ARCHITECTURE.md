@@ -151,6 +151,28 @@ It is bounded by guardrails:
 
 The model can improve interpretation and ranking. It cannot override provider policies or invent licensing permission — `rank_results` output is checked against the returned candidate set, so a hallucinated asset is rejected.
 
+## Relevance: does the result answer the request?
+
+Translation was never the weak point. The brief is turned into good English, then handed to a provider as a literal keyword search — and when a catalogue has nothing close, the provider still returns its best guess. A Hausa birthday request came back as *"I'm Walking Away"*, presented as a match with nothing marking it off-target.
+
+Three things now sit between the provider and the caller:
+
+**Concepts.** The parser returns `core_concepts` — the two to four ideas a result must actually be about, excluding the media type itself, since every result in a lane satisfies that. When the model is unavailable these are derived locally from the request with a stopword filter, so relevance checking still works on the fallback path.
+
+**Scoring.** Every returned asset is scored against those concepts using everything the provider describes it with: title, album, description, tags, music-info tags, keywords and categories. Matching is substring-with-stemming here, deliberately unlike the brief parser's word-boundary rule — a tag list is not prose, and "birthday" should match "Birthdays".
+
+| Strength | Meaning |
+|---|---|
+| `strong` | ≥ 2/3 of the concepts are present |
+| `partial` | some are present |
+| `weak` | none are — the catalogue returned something unrelated |
+
+**Retry.** If nothing scores strong, the same intent is searched again using `alternate_queries` — differently worded English for the same request. A retry only replaces the first attempt when it is genuinely better, and is capped at two rephrasings so an unmatchable request cannot fan out across providers.
+
+Results are ordered by relevance first, then licensing verdict, then price. A permissively licensed asset that is not what was asked for is still the wrong asset.
+
+When nothing matches, the response says so in `matchQuality.notice` rather than letting the closest available result read as an answer. The web UI shows the same thing as a per-result badge next to the licensing verdict.
+
 ## Request guardrails
 
 | Guard | Default | Behaviour on limit |

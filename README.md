@@ -9,7 +9,10 @@ It helps users find licensable images, sound effects, music tracks, and ambience
 1. **Parse and translate.** The brief is normalised into a provider-ready English search query. Requests in Yoruba, Igbo, Hausa, Nigerian Pidgin, Chinese, Arabic, Spanish and other major languages are translated before they reach a provider; the response reports `sourceLanguage` and `translated`.
 2. **Route.** The detected media type selects the provider — images to Shutterstock, sound effects to Freesound, music to Jamendo.
 3. **Screen.** Each result is scored against the provider's own licensing rules and the caller's intended use, producing a policy verdict rather than a legal opinion.
-4. **Rank.** Candidates are ordered by policy verdict and price, then re-ranked for fit against the brief. The ranking model can only reorder assets the providers actually returned; it cannot introduce one.
+4. **Check the match.** Every result is scored against the concepts the request was actually about. If nothing matches, the same intent is searched again in different words before anything is returned.
+5. **Rank.** Candidates are ordered by how well they match, then by policy verdict and price. The ranking model can only reorder assets the providers actually returned; it cannot introduce one.
+
+A provider always returns *something*, even when its catalogue holds nothing close. Responses carry `matchQuality` and a per-result `relevance` verdict, so an off-target result is labelled rather than presented as an answer — and when nothing matches, the response says so.
 
 If the model layer is unavailable, rate limited, or over budget, the service falls back to a deterministic local parser and still returns results.
 

@@ -27,6 +27,8 @@ const COMMERCIAL_WORDS = [
 
 const BROADCAST_WORDS = ["broadcast", "film", "radio", "television", "tv"];
 
+import { extractConcepts } from "./relevance.js";
+
 const COMMERCIAL_PATTERN = buildWordPattern(COMMERCIAL_WORDS);
 const BROADCAST_PATTERN = buildWordPattern(BROADCAST_WORDS);
 
@@ -65,6 +67,10 @@ export function normalizeBriefLocally(input = {}) {
         ? null
         : Number(input.budgetUsd),
     keywords: extractLocalKeywords(query),
+    // What a result has to actually be about. Derived locally so relevance checking
+    // still works when the model is unavailable, rate limited, or over budget.
+    coreConcepts: extractConcepts(query),
+    alternateQueries: [],
   };
 }
 

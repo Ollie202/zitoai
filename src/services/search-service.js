@@ -1,7 +1,10 @@
 import { evaluateAsset } from "../core/policy-engine.js";
 import { rankProviders } from "../core/provider-routing.js";
+import { matchQualityNotice, relevanceRank, scoreAssetRelevance, summariseMatchQuality } from "../core/relevance.js";
 import { allSearchProviders } from "../providers/index.js";
 import { normalizeBrief, rankResultsWithOpenRouter } from "./openrouter.js";
+
+const MAX_ALTERNATE_ATTEMPTS = 2;
 
 export async function searchAssets(input) {
   input = input && typeof input === "object" && !Array.isArray(input) ? input : {};
@@ -26,6 +29,77 @@ export async function searchAssets(input) {
   const selected = rankedProviders.map((entry) => entry.provider);
   const limit = Math.min(Math.max(Number(input.limit) || 6, 1), 12);
 
+  const attempt = await runSearch(selected, rankedProviders, brief, limit);
+  let { results, providerStatus } = attempt;
+  let summary = summariseMatchQuality(results);
+  const attemptedQueries = [brief.query];
+
+  // Nothing came back that reflects the request. A catalogue with no results for one
+  // phrasing often has good ones for another, so the same intent is tried again in
+  // different words before the caller is handed something unrelated.
+  // Each retry is a fresh round of provider calls, so the fan-out is bounded. Two
+  // rephrasings is enough to rescue a catalogue miss without letting an obscure request
+  // multiply into a large number of upstream requests.
+  const alternates = (Array.isArray(brief.alternateQueries) ? brief.alternateQueries : []).slice(0, MAX_ALTERNATE_ATTEMPTS);
+  for (const alternate of alternates) {
+    if (summary.quality === "strong") break;
+    const phrasing = String(alternate || "").trim();
+    if (!phrasing || attemptedQueries.some((q) => q.toLowerCase() === phrasing.toLowerCase())) continue;
+
+    attemptedQueries.push(phrasing);
+    const retry = await runSearch(selected, rankedProviders, { ...brief, query: phrasing }, limit);
+    const retrySummary = summariseMatchQuality(retry.results);
+    if (isBetterMatch(retrySummary, summary)) {
+      results = retry.results;
+      providerStatus = retry.providerStatus;
+      summary = retrySummary;
+      brief.query = phrasing;
+      brief.usedAlternateQuery = true;
+    }
+  }
+
+  const ranked = relevanceRank(results);
+  const aiRanking = await rankResultsWithOpenRouter(brief, ranked);
+  // The ranking model may reorder, but relevance stays authoritative: a well-licensed
+  // asset that is not what was asked for is still the wrong asset.
+  const finalResults = relevanceRank(aiRanking.results);
+  const finalSummary = summariseMatchQuality(finalResults);
+
+  return {
+    brief,
+    processing: {
+      aiAssisted: Boolean(brain?.used || aiRanking.ranking?.used),
+      sourceLanguage: brief.sourceLanguage || "Unknown",
+      translated: Boolean(brief.translated),
+      providerQuery: brief.query,
+      attemptedQueries,
+      usedAlternateQuery: Boolean(brief.usedAlternateQuery),
+    },
+    // Says plainly whether these results answer the request, so a caller is never handed
+    // an unrelated asset as though it were a match.
+    matchQuality: {
+      ...finalSummary,
+      concepts: brief.coreConcepts || [],
+      notice: matchQualityNotice(finalSummary, brief),
+    },
+    recommendedProvider: providerStatus.find((provider) => provider.ok)?.id || null,
+    providers: providerStatus,
+    count: finalResults.length,
+    results: finalResults,
+    generatedAt: new Date().toISOString(),
+    disclaimer:
+      "ZitoAI provides procurement evidence and policy screening, not legal advice or a replacement for the provider's license.",
+  };
+}
+
+// Prefers more genuinely matching results, then more partial ones. A retry only replaces
+// the first attempt when it is actually better, so a worse rephrasing cannot win.
+function isBetterMatch(candidate, current) {
+  if (candidate.strongCount !== current.strongCount) return candidate.strongCount > current.strongCount;
+  return candidate.partialCount > current.partialCount;
+}
+
+async function runSearch(selected, rankedProviders, brief, limit) {
   const settled = await Promise.allSettled(
     selected.map(async (provider) => ({
       provider,
@@ -56,6 +130,7 @@ export async function searchAssets(input) {
       matchedSignals: rankedProviders[index].matchedSignals,
       count: entry.value.assets.length,
     });
+
     for (const asset of entry.value.assets) {
       const policy = evaluateAsset(asset, brief);
       if (brief.budgetUsd != null && asset.priceUsd != null && asset.priceUsd > brief.budgetUsd) {
@@ -63,36 +138,9 @@ export async function searchAssets(input) {
         policy.summary = `Price exceeds the $${brief.budgetUsd} budget`;
         policy.warnings = [...policy.warnings, "Choose a cheaper asset or increase the budget."];
       }
-      results.push({ ...asset, policy });
+      results.push({ ...asset, policy, relevance: scoreAssetRelevance(asset, brief.coreConcepts) });
     }
   }
 
-  const locallyRankedResults = rank(results);
-  const aiRanking = await rankResultsWithOpenRouter(brief, locallyRankedResults);
-
-  return {
-    brief,
-    processing: {
-      aiAssisted: Boolean(brain?.used || aiRanking.ranking?.used),
-      sourceLanguage: brief.sourceLanguage || "Unknown",
-      translated: Boolean(brief.translated),
-      providerQuery: brief.query,
-    },
-    recommendedProvider: providerStatus.find((provider) => provider.ok)?.id || null,
-    providers: providerStatus,
-    count: aiRanking.results.length,
-    results: aiRanking.results,
-    generatedAt: new Date().toISOString(),
-    disclaimer:
-      "ZitoAI provides procurement evidence and policy screening, not legal advice or a replacement for the provider's license.",
-  };
-}
-
-function rank(results) {
-  const verdictScore = { allowed: 4, review: 3, checkout_only: 2, rejected: 0 };
-  return results.sort((a, b) => {
-    const scoreDiff = (verdictScore[b.policy.verdict] || 0) - (verdictScore[a.policy.verdict] || 0);
-    if (scoreDiff) return scoreDiff;
-    return (a.priceUsd ?? Number.MAX_SAFE_INTEGER) - (b.priceUsd ?? Number.MAX_SAFE_INTEGER);
-  });
+  return { results, providerStatus };
 }
