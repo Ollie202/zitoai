@@ -11,4 +11,5 @@ tmp/
 
 .vercel
 .agents/
+.claude/
 skills-lock.json
