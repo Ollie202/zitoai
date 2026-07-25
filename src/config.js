@@ -53,7 +53,13 @@ export const config = {
     // OPENROUTER_MAX_SPEND_USD=0 to intentionally disable spending entirely, or raise it
     // for a longer-running deployment.
     maxSpendUsd: parseOptionalNumber(process.env.OPENROUTER_MAX_SPEND_USD) ?? 25,
-    maxCallsPerMinute: Number(process.env.OPENROUTER_MAX_CALLS_PER_MINUTE || 20),
+    // Each search costs two model calls, so this is half the searches per minute the
+    // service can parse before it degrades to the local parser — which cannot translate.
+    // At 20 that was 10 searches a minute across all callers, and a short burst of
+    // testing silently turned non-English requests back into untranslated ones. The
+    // cumulative spend ceiling is the real cost control; this one only needs to stop a
+    // runaway loop.
+    maxCallsPerMinute: Number(process.env.OPENROUTER_MAX_CALLS_PER_MINUTE || 120),
     maxInputChars: Number(process.env.OPENROUTER_MAX_INPUT_CHARS || 12000),
   },
   usage: {

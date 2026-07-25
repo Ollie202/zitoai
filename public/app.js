@@ -185,12 +185,19 @@ function render(body) {
   const retried = body.processing?.usedAlternateQuery
     ? `<span>Reworded the search to find a match</span>`
     : "";
+  // Without this the page looks identical when translation is unavailable — the request
+  // simply goes to the provider in its original language and quietly returns worse
+  // results.
+  const degraded = body.processing?.degraded
+    ? `<span>Language model unavailable — searched without translation</span>`
+    : "";
   summary.innerHTML = `
     <strong>${body.count} result${body.count === 1 ? "" : "s"} · ${recommended} selected first · ${body.brief.commercial ? "commercial" : "personal"} use</strong>
     <span>Language: ${escapeHtml(language)}</span>
     <span>Provider search: ${escapeHtml(providerQuery)}</span>
     ${originalQuery}
     ${retried}
+    ${degraded}
   `;
   if (!body.results.length) {
     results.innerHTML = '<div class="notice">No provider returned a strong match. Try a broader brief, remove extra constraints, or choose a specific media type.</div>';

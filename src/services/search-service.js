@@ -74,6 +74,11 @@ export async function searchAssets(input) {
       providerQuery: brief.query,
       attemptedQueries,
       usedAlternateQuery: Boolean(brief.usedAlternateQuery),
+      // Degrading to the local parser is silent from the outside: the request still
+      // succeeds, it just stops being translated. That is exactly the state that made a
+      // broken AI layer look like working software, so it is named here.
+      degraded: brain?.used === false && brain?.mode !== "local",
+      degradedReason: brain?.used === false && brain?.mode !== "local" ? brain?.error || "The language model was unavailable for this request." : null,
     },
     // Says plainly whether these results answer the request, so a caller is never handed
     // an unrelated asset as though it were a match.
