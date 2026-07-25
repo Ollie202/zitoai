@@ -8,7 +8,7 @@ ZitoAI is a zero-fee OKX.AI ASP and A2MCP API service for rights-aware media sea
 
 | Item | Status |
 |---|---|
-| Public website | Live at https://www.zitoai.xyz |
+| Public origin | Live at https://asp.zitoai.xyz — one host serving the A2MCP endpoint, agent card, manifest and browser UI |
 | ASP base | Live at https://asp.zitoai.xyz |
 | A2MCP manifest | Live at https://asp.zitoai.xyz/.well-known/a2mcp.json |
 | Primary service endpoint | `POST https://asp.zitoai.xyz/api/a2mcp/media-search` |

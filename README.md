@@ -20,11 +20,13 @@ If the model layer is unavailable, rate limited, or over budget, the service fal
 
 | Surface | URL |
 |---|---|
-| Website | https://www.zitoai.xyz |
-| ASP base | https://asp.zitoai.xyz |
+| ASP base and website | https://asp.zitoai.xyz |
 | Health check | https://asp.zitoai.xyz/api/health |
+| Agent card | https://asp.zitoai.xyz/.well-known/agent.json |
 | A2MCP manifest | https://asp.zitoai.xyz/.well-known/a2mcp.json |
 | A2MCP media search | `POST https://asp.zitoai.xyz/api/a2mcp/media-search` |
+
+One origin serves everything: the A2MCP endpoint, the agent card and manifest, and the browser UI. There is no separate web host to keep in sync, and no second URL that can go stale while the service itself is healthy.
 
 ## Active providers
 

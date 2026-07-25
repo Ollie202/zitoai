@@ -6,7 +6,10 @@ loadEnvFile(resolve(process.cwd(), ".env"));
 
 export const config = {
   port: Number(process.env.PORT || 3000),
-  publicBaseUrl: process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
+  // Defaults to the ASP origin, which serves the browser UI as well as the API. A
+  // separate www host was advertised here in the agent card while returning nothing, so
+  // the fallback is now the origin that actually answers.
+  publicBaseUrl: process.env.PUBLIC_BASE_URL || "https://asp.zitoai.xyz",
   aspBaseUrl: process.env.ASP_BASE_URL || process.env.PUBLIC_BASE_URL || "https://asp.zitoai.xyz",
   payment: {
     apiKey: process.env.OKX_API_KEY || "",
@@ -46,7 +49,7 @@ export const config = {
       process.env.OPENROUTER_SMART_FALLBACK_MODEL ||
       process.env.OPENROUTER_FAST_MODEL ||
       "google/gemini-2.5-flash",
-    siteUrl: process.env.OPENROUTER_SITE_URL || process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
+    siteUrl: process.env.OPENROUTER_SITE_URL || process.env.PUBLIC_BASE_URL || "https://asp.zitoai.xyz",
     appName: process.env.OPENROUTER_APP_NAME || "ZitoAI",
     // Defaults to an active ceiling rather than "unlimited". Left unset, the budget
     // guard silently never fired, because Number.isFinite(null) is false. Set
