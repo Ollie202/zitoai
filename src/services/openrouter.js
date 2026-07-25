@@ -63,12 +63,33 @@ function rankResultsModel() {
   return config.openRouter.smartModel || DEFAULT_RANK_RESULTS_MODEL;
 }
 
+// Ordered list of models to try for one function. The fallback is from a different
+// provider, so a provider-wide incident costs quality on one call rather than dropping
+// the whole AI layer. Duplicates are removed so a shared override does not retry the
+// same failing model twice.
+function parseBriefChain() {
+  return dedupe([parseBriefModel(), config.openRouter.fastFallbackModel]);
+}
+
+function rankResultsChain() {
+  return dedupe([rankResultsModel(), config.openRouter.smartFallbackModel]);
+}
+
+function dedupe(models) {
+  return [...new Set(models.filter(Boolean))];
+}
+
 export function brainStatus() {
   return {
     configured: Boolean(config.openRouter.apiKey),
     status: config.openRouter.apiKey ? "ready" : "fallback",
     fallbackAvailable: true,
-    models: { parseBrief: parseBriefModel(), rankResults: rankResultsModel() },
+    models: {
+      parseBrief: parseBriefModel(),
+      parseBriefFallback: parseBriefChain()[1] || null,
+      rankResults: rankResultsModel(),
+      rankResultsFallback: rankResultsChain()[1] || null,
+    },
     guardrails: {
       maxCallsPerMinute: config.openRouter.maxCallsPerMinute,
       maxInputChars: config.openRouter.maxInputChars,
@@ -85,6 +106,8 @@ export function internalBrainStatus() {
     smartModel: rankResultsModel(),
     parseBriefModel: parseBriefModel(),
     rankResultsModel: rankResultsModel(),
+    parseBriefChain: parseBriefChain(),
+    rankResultsChain: rankResultsChain(),
     fallback: "deterministic-local-parser",
     guardrails: openRouterGuardrailStatus(),
   };
@@ -118,12 +141,15 @@ export async function normalizeBrief(input) {
   }
 
   try {
-    const body = await requestStructuredJson({
+    const attempt = await requestWithFallback({
       functionName: "parse_brief",
-      model: parseBriefModel(),
+      models: parseBriefChain(),
       schemaName: "zito_parse_brief",
       schema: PARSE_BRIEF_SCHEMA,
       maxTokens: 180,
+      // Parsing the model's own output is part of the attempt: a model that returns
+      // unusable JSON should hand over to the fallback, not degrade to the local parser.
+      validate: (body) => JSON.parse(body.choices?.[0]?.message?.content || "{}"),
       messages: [
         {
           role: "system",
@@ -155,15 +181,14 @@ export async function normalizeBrief(input) {
         },
       ],
     });
-    return buildBriefResult(body, local, request);
+    return buildBriefResult(attempt, local, request);
   } catch (error) {
-    logOpenRouterEvent({ functionName: "parse_brief", model: parseBriefModel(), success: false, fallback: true, reason: error.message });
     return {
       brief: local,
       brain: {
         used: false,
         mode: "local-fallback",
-        attemptedModels: [parseBriefModel()],
+        attemptedModels: parseBriefChain(),
         error: error.message,
         guardrails: openRouterGuardrailStatus(),
       },
@@ -209,12 +234,15 @@ export async function rankResultsWithOpenRouter(brief, results) {
   }
 
   try {
-    const body = await requestStructuredJson({
+    const attempt = await requestWithFallback({
       functionName: "rank_results",
-      model: rankResultsModel(),
+      models: rankResultsChain(),
       schemaName: "zito_rank_results",
       schema: RANK_RESULTS_SCHEMA,
       maxTokens: 350,
+      // A model that invents an asset id fails validation and hands over to the
+      // fallback, rather than costing the caller its ranking entirely.
+      validate: (body) => validateRanking(JSON.parse(body.choices?.[0]?.message?.content || "{}"), candidates),
       messages: [
         {
           role: "system",
@@ -224,18 +252,56 @@ export async function rankResultsWithOpenRouter(brief, results) {
         { role: "user", content: payload.slice(0, config.openRouter.maxInputChars) },
       ],
     });
-    const parsed = JSON.parse(body.choices?.[0]?.message?.content || "{}");
-    const ranked = validateRanking(parsed, candidates);
-    return { results: applyRanking(candidates, ranked), ranking: { used: true, mode: "ai-assisted" } };
+    return {
+      results: applyRanking(candidates, attempt.value),
+      ranking: {
+        used: true,
+        mode: attempt.usedFallback ? "ai-assisted-fallback-model" : "ai-assisted",
+        model: attempt.model,
+        usedFallbackModel: attempt.usedFallback,
+      },
+    };
   } catch (error) {
-    logOpenRouterEvent({ functionName: "rank_results", model: rankResultsModel(), success: false, fallback: true, reason: error.message });
-    return { results: candidates, ranking: { used: false, mode: "fallback-unranked", error: error.message, guardrails: openRouterGuardrailStatus() } };
+    return { results: candidates, ranking: { used: false, mode: "fallback-unranked", attemptedModels: rankResultsChain(), error: error.message, guardrails: openRouterGuardrailStatus() } };
   }
 }
 
 export function selectModel(input = {}) {
   const request = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   return request.rankResults ? rankResultsModel() : parseBriefModel();
+}
+
+// Runs `validate` against each model in the chain until one produces usable output.
+// A model that errors, or that returns output the caller cannot use, is treated the
+// same way: move to the next model. Only when every model in the chain has failed does
+// the caller fall back to the deterministic local path.
+async function requestWithFallback({ functionName, models, schemaName, schema, maxTokens, messages, validate }) {
+  let lastError = null;
+
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    try {
+      const body = await requestStructuredJson({ functionName, model, schemaName, schema, maxTokens, messages });
+      const value = validate(body);
+      if (index > 0) {
+        logOpenRouterEvent({ functionName, model, success: true, recoveredByFallback: true, afterFailing: models[index - 1] });
+      }
+      return { value, model, usedFallback: index > 0 };
+    } catch (error) {
+      lastError = error;
+      const isLast = index === models.length - 1;
+      logOpenRouterEvent({
+        functionName,
+        model,
+        success: false,
+        fallback: !isLast,
+        willRetryWith: isLast ? null : models[index + 1],
+        reason: error.message,
+      });
+    }
+  }
+
+  throw lastError || new Error(`${functionName} failed on every model`);
 }
 
 async function requestStructuredJson({ functionName, model, schemaName, schema, maxTokens, messages }) {
@@ -265,9 +331,8 @@ async function requestStructuredJson({ functionName, model, schemaName, schema, 
   return body;
 }
 
-function buildBriefResult(body, local, input) {
-  const parsed = JSON.parse(body.choices?.[0]?.message?.content || "{}");
-  const validated = validateParsedBrief(parsed);
+function buildBriefResult(attempt, local, input) {
+  const validated = validateParsedBrief(attempt.value);
   const usageRights = validated.usage_rights;
   const translatedQuery = oneLine(validated.translated_query);
   const providerQuery = translatedQuery || local.query;
@@ -290,7 +355,9 @@ function buildBriefResult(body, local, input) {
     brief,
     brain: {
       used: true,
-      mode: "ai-assisted",
+      mode: attempt.usedFallback ? "ai-assisted-fallback-model" : "ai-assisted",
+      model: attempt.model,
+      usedFallbackModel: attempt.usedFallback,
       multilingual: {
         sourceLanguage: brief.sourceLanguage,
         originalQuery: brief.originalQuery,

@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { fetchJson } from "../lib/http.js";
 import { shutterstockApiBase } from "../services/shutterstock.js";
+import { jamendoProxyDownloadUrl, jamendoUpstreamDownloadUrl } from "../services/jamendo-download.js";
 
 // Caps the fan-out when a search finds nothing. Previously up to 9 candidate queries
 // were tried, each retried twice, so one inbound search could become ~27 upstream
@@ -73,7 +74,12 @@ export const jamendoProvider = {
       id: String(item.id), provider: "jamendo", title: item.name, creator: item.artist_name || "Jamendo artist",
       assetType: "music",
       previewUrl: item.audio || null,
-      mediaUrl: item.audiodownload_allowed ? item.audiodownload || null : null,
+      previewContentType: item.audio ? "audio/mpeg" : null,
+      // Served through ZitoAI rather than linked directly: Jamendo's own download URL
+      // returns the MP3 with Content-Type: text/html, so clients that trust the header
+      // render binary audio instead of downloading it.
+      mediaUrl: item.audiodownload_allowed ? jamendoProxyDownloadUrl(String(item.id)) : null,
+      mediaContentType: item.audiodownload_allowed ? "audio/mpeg" : null,
       sourceUrl: item.shareurl || `https://www.jamendo.com/track/${item.id}`,
       purchaseUrl: item.prourl || item.shareurl || `https://www.jamendo.com/track/${item.id}`,
       licenseUrl: item.prourl || item.license_ccurl || item.shareurl || `https://www.jamendo.com/track/${item.id}`,
@@ -100,7 +106,12 @@ export const jamendoProvider = {
         licenseUrl: item.license_ccurl || null,
         proLicenseUrl: item.prourl || null,
         audiodownloadAllowed: item.audiodownload_allowed ?? null,
-        rawDownloadUrl: item.audiodownload_allowed ? item.audiodownload || null : null,
+        rawDownloadUrl: item.audiodownload_allowed ? jamendoProxyDownloadUrl(String(item.id)) : null,
+        rawDownloadContentType: item.audiodownload_allowed ? "audio/mpeg" : null,
+        // Kept for transparency and for callers that would rather go direct, with the
+        // upstream defect recorded alongside it.
+        providerDownloadUrl: item.audiodownload_allowed ? item.audiodownload || jamendoUpstreamDownloadUrl(String(item.id)) : null,
+        providerDownloadContentTypeIsWrong: item.audiodownload_allowed ? true : null,
         contentIdFree: item.content_id_free ?? null,
         commercialProgramMatched: Boolean(item.prourl) || Boolean(brief.commercial),
         checkoutEvidenceRequired: true,

@@ -70,6 +70,17 @@ The listed price is `0 USDT`. The endpoint gates on the presence of a payment pr
 | Model spend | 25 USD per process | Falls back to the local parser |
 | Request body | 100 KB | `413` |
 | Provider queries per search | 4 candidates, retried only on the primary | Returns the first response rather than repeating it |
+| Model failure | Cross-provider fallback model | Retries on the other provider, then the local parser |
+
+## Downloads
+
+Jamendo's own download URL returns a valid MP3 with `Content-Type: text/html`, so any client that trusts the header renders binary audio as a web page. Music results therefore expose `mediaUrl` as a ZitoAI route that re-serves the same bytes as `audio/mpeg`:
+
+```text
+GET /api/providers/jamendo/tracks/{trackId}/download
+```
+
+The route accepts only a numeric track id and builds the upstream URL itself, so it cannot be used as a general proxy. Results also carry an explicit `mediaContentType` and `previewContentType` so agents never have to trust an upstream header, and `metadata.providerDownloadUrl` still records the original link.
 
 ## Local development
 

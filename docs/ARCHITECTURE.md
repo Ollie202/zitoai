@@ -114,10 +114,29 @@ Used for music tracks. The public developer API supports catalog search and meta
 
 OpenRouter improves intent parsing, translation, provider routing, keyword expansion and ranking. Two models are used:
 
-| Function | Model variable | Role |
-|---|---|---|
-| `parse_brief` | `OPENROUTER_FAST_MODEL` | Detects the source language, translates the request into a provider-ready English query, and classifies media type and usage rights |
-| `rank_results` | `OPENROUTER_SMART_MODEL` | Reorders the candidates the providers returned |
+| Function | Model variable | Default | Role |
+|---|---|---|---|
+| `parse_brief` | `OPENROUTER_FAST_MODEL` | `google/gemini-2.5-flash` | Detects the source language, translates the request into a provider-ready English query, and classifies media type and usage rights |
+| `rank_results` | `OPENROUTER_SMART_MODEL` | `openai/gpt-4o-mini` | Reorders the candidates the providers returned |
+
+Model selection is measured, not assumed. Over 120 parses spanning 20 languages — weighted toward Yoruba, Igbo, Hausa, Nigerian Pidgin and code-switched requests — the candidates scored:
+
+| Model | Meaning | Asset type | Language | Variance | p50 |
+|---|---|---|---|---|---|
+| `google/gemini-2.5-flash` | 100% | **100%** | 100% | **0** | 510ms |
+| `openai/gpt-4o-mini` | 100% | 99% | 100% | 1 | 682ms |
+| `openai/gpt-4.1-mini` | 100% | 99% | 100% | 1 | 426ms |
+| `google/gemini-2.5-flash-lite` | 100% | 98% | 100% | 1 | 514ms |
+| `deepseek/deepseek-chat` | 98% | 98% | 100% | 1 | 829ms |
+| `meta-llama/llama-3.3-70b-instruct` | disqualified — returns `undefined` fields under strict mode | | | | |
+
+Translation quality is effectively tied across the top four; `gemini-2.5-flash` takes parsing on asset-type accuracy and zero run-to-run variance. Ranking goes to the other provider's model because its output is validated against the candidate set, so a weaker ranking cannot produce a wrong answer — only a less useful order.
+
+### Fallback
+
+Each function has a model chain: the primary, then a fallback from a *different provider*. A model that errors, or that returns output the caller cannot use — unparseable JSON for parsing, a hallucinated asset id for ranking — hands over to the next model. Only when every model in the chain has failed does the request fall back to the deterministic local parser.
+
+This means a provider-wide incident degrades one function rather than disabling the AI layer. `/api/health` reports both the active model and its fallback.
 
 Both calls use strict JSON-schema structured outputs. Every schema property declares an explicit `type`: an enum without a type is not valid under strict mode, and providers that enforce it satisfy `required` by emitting `null`, which previously caused a complete and correctly translated brief to be rejected by validation.
 

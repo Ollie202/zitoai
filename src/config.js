@@ -25,10 +25,27 @@ export const config = {
   },
   openRouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",
+    // parse_brief carries the product: it detects the language and produces the English
+    // query the providers actually receive. Benchmarked over 120 parses across 20
+    // languages, gemini-2.5-flash was the only model perfect on meaning, asset type and
+    // language detection with zero run-to-run variance, so it takes the harder job.
     fastModel:
-      process.env.OPENROUTER_FAST_MODEL || "google/gemini-2.5-flash-lite",
+      process.env.OPENROUTER_FAST_MODEL || "google/gemini-2.5-flash",
+    // rank_results only reorders candidates the providers already returned, and its
+    // output is validated against that set, so the cheaper cross-provider model is used.
     smartModel:
       process.env.OPENROUTER_SMART_MODEL || "openai/gpt-4o-mini",
+    // Fallbacks default to the other function's model, which is deliberately from a
+    // different provider: a provider-wide incident then degrades one function's quality
+    // instead of taking the whole AI layer down to the local parser.
+    fastFallbackModel:
+      process.env.OPENROUTER_FAST_FALLBACK_MODEL ||
+      process.env.OPENROUTER_SMART_MODEL ||
+      "openai/gpt-4o-mini",
+    smartFallbackModel:
+      process.env.OPENROUTER_SMART_FALLBACK_MODEL ||
+      process.env.OPENROUTER_FAST_MODEL ||
+      "google/gemini-2.5-flash",
     siteUrl: process.env.OPENROUTER_SITE_URL || process.env.PUBLIC_BASE_URL || "https://www.zitoai.xyz",
     appName: process.env.OPENROUTER_APP_NAME || "ZitoAI",
     // Defaults to an active ceiling rather than "unlimited". Left unset, the budget

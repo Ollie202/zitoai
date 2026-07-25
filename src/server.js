@@ -12,6 +12,7 @@ import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./service
 import { completeOAuth, oauthStatus, startOAuth } from "./services/oauth.js";
 import { downloadFreesoundOriginal, freesoundStatus, getFreesoundMe } from "./services/freesound.js";
 import { jamendoStatus } from "./services/jamendo.js";
+import { jamendoTrackId, streamJamendoDownload } from "./services/jamendo-download.js";
 import {
   getShutterstockImageDetails,
   licenseShutterstockImage,
@@ -129,6 +130,22 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/providers/jamendo/status") {
       return json(response, 200, jamendoStatus());
     }
+    const jamendoDownloadMatch = url.pathname.match(/^\/api\/providers\/jamendo\/tracks\/([^/]+)\/download$/i);
+    if (jamendoDownloadMatch) {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return json(response, 405, { error: "Use GET to download a Jamendo track." });
+      }
+      const trackId = jamendoTrackId(jamendoDownloadMatch[1]);
+      if (!trackId) return json(response, 400, { error: "Track id must be numeric." });
+      const limit = checkRateLimit(request);
+      if (!limit.ok) {
+        return json(response, 429, { error: "Too many requests. Please retry shortly.", retryAfterSeconds: limit.retryAfterSeconds }, { "Retry-After": String(limit.retryAfterSeconds) });
+      }
+      // Awaited, not returned bare: `return promise` inside a try block does not await,
+      // so a rejection would escape this handler's catch, hang the connection, and take
+      // the process down as an unhandled rejection.
+      return await streamJamendoDownload(trackId, response, securityHeaders({}));
+    }
     if (request.method === "GET" && url.pathname === "/api/providers/shutterstock/categories") {
       return json(response, 200, await listShutterstockImageCategories());
     }
@@ -235,10 +252,16 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && evidenceMatch) {
       return json(response, 201, { evidence: await registerEvidence(request, evidenceMatch[1], await readJson(request)) });
     }
-    if (request.method === "GET") return serveStatic(url.pathname, response);
+    if (request.method === "GET") return await serveStatic(url.pathname, response);
 
     return json(response, 404, { error: "Not found" });
   } catch (error) {
+    // A streaming route may already have sent headers; writing a second response would
+    // throw and mask the original failure.
+    if (response.headersSent) {
+      console.error("[zitoai] error after response started:", error?.message);
+      return response.destroy();
+    }
     return json(response, errorStatus(error), { error: clientErrorMessage(error) });
   }
 });
@@ -268,6 +291,28 @@ function clientErrorMessage(error) {
   console.error("[zitoai] unhandled request error:", message);
   if (status === 503) return "A required upstream service is not configured. Please try again later.";
   return "The service could not complete this request. Please try again.";
+}
+
+// Node terminates the process on an unhandled rejection by default. For a single-
+// instance service that turns one missed `await` into an outage, so these are logged
+// loudly and survived instead. An uncaughtException leaves the process in an unknown
+// state, so that one closes the listener and exits for the platform to restart.
+process.on("unhandledRejection", (reason) => {
+  console.error("[zitoai] unhandled rejection:", reason instanceof Error ? reason.stack : reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[zitoai] uncaught exception, shutting down:", error?.stack || error);
+  server.close(() => process.exit(1));
+  setTimeout(() => process.exit(1), 5_000).unref();
+});
+
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, () => {
+    console.log(`[zitoai] ${signal} received, closing server`);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 10_000).unref();
+  });
 }
 
 server.listen(config.port, () => {
