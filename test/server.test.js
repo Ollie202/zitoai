@@ -61,11 +61,34 @@ test("the 402 challenge decodes to a well-formed x402 offer", async () => {
   assert.match(offer.network, /^eip155:\d+$/);
   assert.match(offer.payTo, /^0x[0-9a-fA-F]{40}$/);
   assert.equal(offer.maxTimeoutSeconds, 300);
+
+  // The EIP-712 domain a payer signs the EIP-3009 authorization against, and nothing
+  // else: PaymentRequirements is a closed type, so anything extra here is an unknown key
+  // in the object the marketplace validates.
   assert.deepEqual(offer.extra, { name: "USD₮0", version: "1" });
-  assert.equal(offer.decimals, 6);
-  assert.equal(offer.amountHuman, "0");
-  assert.equal(offer.outputSchema.input.method, "POST");
-  assert.deepEqual(offer.outputSchema.input.body.required, ["query"]);
+
+  assert.match(offer.amount, /^\d+$/);
+
+  // Price scale and request shape moved off the accepts entry to the challenge's
+  // `extensions`, which is where the v2 type allows them.
+  assert.equal(decoded.extensions.decimals, 6);
+  assert.equal(decoded.extensions.amountHuman, "0");
+  assert.equal(decoded.extensions.inputSchema.method, "POST");
+  assert.deepEqual(decoded.extensions.inputSchema.body.required, ["query"]);
+});
+
+// The old gate was "is a payment header present", so any string bought a real search.
+test("an unsigned payment header does not buy a search", async () => {
+  const response = await fetch(`${base}/api/a2mcp/media-search`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "PAYMENT-SIGNATURE": "proof" },
+    body: JSON.stringify({ query: "rain" }),
+  });
+
+  assert.equal(response.status, 402);
+  assert.ok(response.headers.get("payment-required"), "a fresh challenge comes back with the rejection");
+  const body = await response.json();
+  assert.ok(["payment_required", "invalid_payload"].includes(body.error), `unexpected error ${body.error}`);
 });
 
 test("expensive routes are rate limited per client", async () => {
@@ -248,6 +271,10 @@ test("health reports the models actually in use", async () => {
   assert.ok(body.brain.models.parseBrief, "health must name the parse model");
   assert.ok(body.brain.models.rankResults, "health must name the ranking model");
   assert.equal(body.payment.amount, "0");
+  assert.equal(body.payment.authorization, "EIP-3009 transferWithAuthorization");
+  // Settlement is the part that cannot work without OKX credentials, so health reports
+  // whether it is actually wired rather than assuming it.
+  assert.equal(typeof body.payment.facilitatorConfigured, "boolean");
 });
 
 test("the agent card and A2MCP manifest agree on the endpoint", async () => {
@@ -260,4 +287,27 @@ test("the agent card and A2MCP manifest agree on the endpoint", async () => {
   assert.equal(cardEndpoint, manifestEndpoint, "a mismatch here would break agent discovery");
   assert.match(manifestEndpoint, /\/api\/a2mcp\/media-search$/);
   assert.equal(manifest.services[0].method, "POST");
+});
+
+// These run the same provider search and return the same product as the A2MCP route, so
+// an ungated one is a way around the gate rather than a separate feature.
+test("the sibling search routes are behind the same authorization gate", async () => {
+  // A fresh client per request: these paths are rate limited, and a 429 from a bucket an
+  // earlier test drained would pass the "not 200" check without proving anything.
+  let client = 20;
+  const call = (path, headers) =>
+    fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-Forwarded-For": `198.51.100.${client++}`, ...headers },
+      body: JSON.stringify({ query: "rain" }),
+    });
+
+  for (const path of ["/api/search", "/api/agent/search"]) {
+    const unsigned = await call(path);
+    assert.equal(unsigned.status, 402, `${path} must not serve an unauthorized caller`);
+    assert.ok(unsigned.headers.get("payment-required"), `${path} must answer with a challenge`);
+
+    const junk = await call(path, { "PAYMENT-SIGNATURE": "proof" });
+    assert.equal(junk.status, 402, `${path} must not accept an unsigned header`);
+  }
 });

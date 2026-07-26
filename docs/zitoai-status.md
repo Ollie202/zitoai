@@ -4,7 +4,7 @@ Last updated: 2026-07-20
 
 ## Current state
 
-ZitoAI is a zero-fee OKX.AI ASP and A2MCP API service for rights-aware media search. The endpoint is free to call, but it still uses an x402 challenge so OKX agents can complete the standard pay-and-replay flow.
+ZitoAI is an OKX.AI ASP and A2MCP API service for rights-aware media search, free to call over x402 and authorized with EIP-3009 `transferWithAuthorization`.
 
 | Item | Status |
 |---|---|
@@ -160,12 +160,14 @@ Verified end to end after the structured-output fix:
 
 Latest x402 reviewer fix:
 
-- The endpoint is no longer treated as plain free HTTP.
-- Unpaid GET and POST requests to `/api/a2mcp/media-search` return HTTP `402`.
-- The 402 body includes `x402Version: 1` and an `accepts` array.
-- The accepted asset is X Layer USDT: `0x779ded0c9e1022225f8e0630b35a9b54be713736`.
-- The accepted amount is `0`, matching the free listing while preserving the OKX pay-and-replay handshake.
-- Replayed POST requests with a payment proof header return HTTP `200` and the normal A2MCP result.
+The listing was rejected for not using EIP-3009 as the payment authorization method. It was not: the endpoint gated on the *presence* of a payment header, so `X-PAYMENT: anything` returned a real search result. No signature was recovered, no nonce tracked, no facilitator consulted.
+
+- The challenge is x402 v2, base64 in the `PAYMENT-REQUIRED` header (the marketplace validates the header, not the body).
+- The single `accepts` entry carries exactly the seven documented `PaymentRequirements` fields. `extra` is `{name, version}` — the token's EIP-712 domain, and the way the OKX SDK encodes EIP-3009. It emits `assetTransferMethod` only for assets whose method is not the default, and its registry entry for `eip155:196` declares none; the facilitator's own `/supported` lists `exact` on `eip155:196` with `extra: null` alongside a separate `permit2` variant.
+- Replays are verified: the signer is recovered over the `TransferWithAuthorization` struct against the token's EIP-712 domain, checked against the published offer, time-windowed, replay-protected on `(from, nonce)`, and then confirmed by the OKX facilitator before any work is done.
+- The accepted asset is X Layer USD₮0 `0x779ded0c9e1022225f8e0630b35a9b54be713736`, confirmed on chain to implement EIP-3009 (`TRANSFER_WITH_AUTHORIZATION_TYPEHASH` returns the canonical `0x7c7c6cdb…`; `permit()` reverts).
+- The amount is `0`, matching the free listing. Verified against the live facilitator that this does not weaken anything: at amount 0 it still returns `invalid_signature` for a forged `from`, a garbage signature or a rewritten `to`, and validates only an honest authorization. Settlement is skipped because nothing moves, and the receipt says `no_settlement_required` rather than claiming a transaction.
+- `node scripts/x402-selfcheck.mjs <base-url>` reproduces all of the above against a running deployment.
 
 Honest limitation:
 
@@ -182,7 +184,7 @@ ZitoAI helps users quickly find licensable images, sound effects, music tracks, 
 Service description:
 
 ```text
-ZitoAI provides zero-fee x402 access to a rights-aware media search and licensing assistant. It takes a natural language request, understands the intended use, searches the most relevant provider, filters the results by media type and usage fit, and returns the strongest matches for images, sound effects, music tracks, and ambience with the licensing details needed to choose the right asset.
+ZitoAI provides free x402 access to a rights-aware media search and licensing assistant. It takes a natural language request, understands the intended use, searches the most relevant provider, filters the results by media type and usage fit, and returns the strongest matches for images, sound effects, music tracks, and ambience with the licensing details needed to choose the right asset.
 ```
 
 ## Remaining operational work
@@ -190,4 +192,7 @@ ZitoAI provides zero-fee x402 access to a rights-aware media search and licensin
 - Re-run OKX x402 validation against the live Railway deployment after this fix is deployed.
 - Keep provider tokens fresh in Railway.
 - Rotate any provider secrets that were exposed in screenshots or chat.
-- If the listing intentionally changes from zero-fee to paid, update `OKX_PAYMENT_AMOUNT`, the registration fee, and the reviewer-facing docs together.
+- Set `OKX_API_KEY`, `OKX_SECRET_KEY` and `OKX_PASSPHRASE` in Railway — without them every paid call fails closed with `503`.
+- Keep the OKX.AI listing fee and `OKX_PAYMENT_AMOUNT` in step. Both are currently `0`; raising one without the other will not reconcile at review.
+- `/api/search` and `/api/agent/search` are gated by the same EIP-3009 authorization as the A2MCP route.
+- Run `node scripts/x402-selfcheck.mjs https://asp.zitoai.xyz` after deploying, before resubmitting for review.

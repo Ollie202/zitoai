@@ -1,6 +1,6 @@
 # ZitoAI architecture
 
-ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one zero-fee x402 A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata after the standard OKX Agent Payments Protocol pay-and-replay handshake.
+ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one x402 A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata, after an EIP-3009 pay-and-replay handshake carried out through the OKX Agent Payments Protocol.
 
 ## Product boundary
 
@@ -47,7 +47,7 @@ A2MCP response with results, scopes, license metadata, previews and next step
 | `GET` | `/api/health` | Runtime status for brain, storage, OAuth and payment mode |
 | `GET` | `/.well-known/a2mcp.json` | OKX.AI A2MCP service manifest |
 | `GET` or `POST` | `/api/a2mcp/media-search` | Primary ASP endpoint for agents. Unpaid requests return a 402 challenge. Replayed POST requests return results |
-| `POST` | `/api/search` | Unpaid search endpoint, same pipeline as the A2MCP route |
+| `POST` | `/api/search` | Same pipeline and same x402 gate as the A2MCP route |
 | `POST` | `/api/brief` | Brief normalization endpoint |
 | `GET` | `/api/providers` | Provider configuration status |
 | `POST` | `/api/evidence-pack` | JSON or PDF evidence export |
@@ -210,9 +210,23 @@ An Evidence Pack is proof of recorded evidence, not a replacement license.
 
 ## Payment mode
 
-The current A2MCP service uses zero-fee x402. Unpaid calls to `/api/a2mcp/media-search` return HTTP `402` with an `accepts` array containing X Layer USDT and amount `0`. After the OKX Agent Payments Protocol pay-and-replay handshake, the same POST request returns HTTP `200` with the media-search result.
+The A2MCP service uses x402 v2, scheme `exact`, authorized with EIP-3009 `transferWithAuthorization`. The price is currently 0, which changes what settles, not what is required: a caller must still present a genuine signed authorization.
 
-Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. The zero-fee A2MCP call does not mean provider assets are free to use.
+Unpaid calls to `/api/a2mcp/media-search` return HTTP `402` with the challenge base64-encoded in the `PAYMENT-REQUIRED` header (the marketplace validates the header, not the body). The single `accepts` entry names X Layer USD₮0 and the price in minimal units, and carries the token's EIP-712 domain in `extra` so a payer can construct the authorization.
+
+On replay with a `PAYMENT-SIGNATURE` header the service:
+
+1. decodes the payload and checks it against the offer it published — scheme, network, asset, `payTo`, and that the signed value covers the price;
+2. checks the validity window and the nonce shape;
+3. recovers the signer over the `TransferWithAuthorization` struct against the token's EIP-712 domain, and rejects anything that does not recover to the authorization's `from`;
+4. claims the `(from, nonce)` pair, so the same signed header cannot be replayed in the window before settlement confirms on chain;
+5. asks the OKX facilitator to verify — it alone can see the payer's balance and on-chain nonce state;
+6. runs the search, and only then settles, so a payer is never charged for a request that failed;
+7. returns HTTP `200` with the result and a `PAYMENT-RESPONSE` receipt carrying the settlement status and transaction.
+
+Any failure re-issues a fresh challenge alongside the error, so a client with an expired signature can retry without a second round trip. If the facilitator credentials are missing the endpoint fails closed with `503 settlement_unavailable` rather than serving work on an unverified payment.
+
+Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. Paying the A2MCP call fee does not license the provider assets it returns.
 
 ## Security model
 

@@ -12,7 +12,7 @@ export function buildA2McpManifest() {
     role: "ASP",
     serviceType: "A2MCP",
     mode: "standardized_api_service",
-    description: "Multilingual rights-aware media search API for licensable images, sound effects, music tracks, and ambience. The A2MCP endpoint uses a zero-fee x402 challenge so OKX agents can complete the standard pay-and-replay handshake.",
+    description: "Multilingual rights-aware media search API for licensable images, sound effects, music tracks, and ambience. The A2MCP endpoint uses x402 with EIP-3009 transferWithAuthorization as the payment authorization method, so OKX agents complete the standard pay-and-replay handshake. Calls are free, and the signed EIP-3009 authorization is still required and verified.",
     baseUrl,
     websiteUrl: config.publicBaseUrl.replace(/\/+$/, ""),
     billing,
@@ -28,7 +28,7 @@ export function buildA2McpManifest() {
         settlement: billing.settlement,
         paymentRequired: billing.paymentRequired,
         x402: billing.x402,
-        description: "Provides access to a multilingual rights-aware media search assistant through a zero-fee x402 A2MCP endpoint. It takes a natural language request in English, Nigerian languages, or other major languages, normalizes it into a provider-ready search brief, searches the right provider, filters the results by media type and usage fit, and returns strong matches with licensing details.",
+        description: "Provides access to a multilingual rights-aware media search assistant through a free x402 A2MCP endpoint authorized with EIP-3009. It takes a natural language request in English, Nigerian languages, or other major languages, normalizes it into a provider-ready search brief, searches the right provider, filters the results by media type and usage fit, and returns strong matches with licensing details.",
         inputSchema: {
           type: "object",
           required: ["query"],

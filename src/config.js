@@ -22,22 +22,42 @@ export const config = {
       process.env.OKX_PAYMENT_ASSET ||
       process.env.OKX_PAYMENT_TOKEN_ADDRESS ||
       "0x779ded0c9e1022225f8e0630b35a9b54be713736",
-    // EIP-712 domain of the payment token, required for EIP-3009
-    // transferWithAuthorization. A payer builds the signature from these, so omitting
-    // them means no valid EIP-3009 authorization can be produced against this challenge.
-    // Verified against the token's on-chain DOMAIN_SEPARATOR: recomputing it with
-    // name "USD₮0" and version "1" reproduces 0xd591d9ba… exactly.
+    // EIP-712 domain of the payment token. A payer signs the EIP-3009
+    // transferWithAuthorization against exactly these, so a wrong value here produces
+    // signatures that can never verify. Verified against the token's on-chain
+    // DOMAIN_SEPARATOR: recomputing it with name "USD₮0" and version "1" reproduces
+    // 0xd591d9ba… exactly, and these match @okxweb3/x402-evm's own registry entry for
+    // eip155:196. Note the token has no version() getter, so "1" cannot be read back —
+    // it is only recoverable by reproducing the separator.
+    //
+    // Carrying name+version and naming no transfer method is precisely how the OKX SDK
+    // encodes "pay this with EIP-3009": its exact-scheme server emits assetTransferMethod
+    // only for assets that need a non-default method (permit2), and USD₮0 does not.
     assetName: process.env.OKX_PAYMENT_ASSET_NAME || "USD₮0",
     assetVersion: process.env.OKX_PAYMENT_ASSET_VERSION || "1",
-    // Verified on chain: the token's decimals() returns 6. Declared in the challenge so a
-    // client never has to infer the scale to reconcile the price — a reviewer hit
-    // "expected 0 USDT ~ ? minimal units" because the conversion had nothing to work from.
+    // Verified on chain: the token's decimals() returns 6.
     assetDecimals: Number(process.env.OKX_PAYMENT_ASSET_DECIMALS || 6),
+    // Minimal units at 6 decimals: "0" is a free call, 10000 would be 0.01 USD₮0.
+    //
+    // A zero price does not weaken the authorization. Checked against the live OKX
+    // facilitator: at amount 0 it still verifies the EIP-3009 signature in full and
+    // returns invalid_signature for a forged `from`, a garbage signature, or a rewritten
+    // `to` — only an honest authorization comes back valid. So a caller still has to
+    // produce a real signed EIP-3009 authorization to be served; the sole difference is
+    // that nothing is transferred, which is why settlement is skipped at 0 rather than
+    // reporting a transfer that never happened.
     amount: process.env.OKX_PAYMENT_AMOUNT || "0",
     // How long a challenge stays valid. Clients use it to size the signature window.
     maxTimeoutSeconds: Number(process.env.OKX_PAYMENT_MAX_TIMEOUT_SECONDS || 300),
-    priceUsd: process.env.OKX_PAYMENT_PRICE_USD || "0 USDT",
-    syncSettle: parseBoolean(process.env.OKX_PAYMENT_SYNC_SETTLE),
+    assetSymbol: process.env.OKX_PAYMENT_ASSET_SYMBOL || "USDT",
+    // Display label only — the manifest, agent card and health route. Left unset it is
+    // derived from `amount` and the token's decimals, because these were two independent
+    // values: repricing via OKX_PAYMENT_AMOUNT alone would keep advertising the old
+    // figure while charging the new one. Set it only to override the wording.
+    priceUsd: process.env.OKX_PAYMENT_PRICE_USD || "",
+    // Ask the facilitator to settle synchronously so the PAYMENT-RESPONSE carries a real
+    // transaction hash rather than a pending status.
+    syncSettle: parseBoolean(process.env.OKX_PAYMENT_SYNC_SETTLE ?? "true"),
   },
   openRouter: {
     apiKey: process.env.OPENROUTER_API_KEY || "",

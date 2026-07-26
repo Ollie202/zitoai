@@ -40,7 +40,7 @@ ZitoAI does not route production search traffic to earlier prototype or research
 
 ## A2MCP service
 
-The current public OKX.AI listing mode is zero-fee x402.
+The public OKX.AI listing is x402, scheme `exact`, authorized with EIP-3009, priced at 0.
 
 ```text
 Service name: Rights Media Search
@@ -49,22 +49,34 @@ Fee: 0 USDT
 Endpoint: https://asp.zitoai.xyz/api/a2mcp/media-search
 ```
 
-Unpaid calls return HTTP `402` with an `accepts` array. OKX agents should complete the standard pay-and-replay handshake, then replay the POST request to receive results.
+Free is a price, not an exemption: a caller must still present a genuine EIP-3009 authorization to be served. Nothing is transferred, so nothing settles.
+
+Unpaid calls return HTTP `402` with the challenge in the `PAYMENT-REQUIRED` header. Sign the `accepts` entry as an EIP-3009 `transferWithAuthorization` and replay the POST with a `PAYMENT-SIGNATURE` header; the result comes back with a `PAYMENT-RESPONSE` receipt.
 
 Example request:
 
 ```bash
 curl -X POST https://asp.zitoai.xyz/api/a2mcp/media-search \
-  -H "X-PAYMENT: <payment-proof-from-okx-pay-and-replay>" \
+  -H "PAYMENT-SIGNATURE: <base64 x402 v2 payment payload>" \
   -H "Content-Type: application/json" \
   -d "{\"query\":\"upbeat music for a 30 second product launch video\",\"assetType\":\"music\",\"intendedUse\":\"commercial_content\",\"territory\":\"worldwide\",\"limit\":5}"
 ```
 
+Check the endpoint the way a listing review does:
+
+```bash
+node scripts/x402-selfcheck.mjs https://asp.zitoai.xyz
+```
+
 The endpoint is CORS-enabled for any origin and answers `OPTIONS` preflight with `204`, so browser-based agents can read the `402` challenge rather than seeing an opaque network failure.
 
-### Zero-fee mode and payment verification
+### Payment verification
 
-The listed price is `0 USDT`. The endpoint gates on the presence of a payment proof header so that agents complete the standard handshake, but it does not cryptographically verify the authorization, because at a zero amount a valid signature and an arbitrary one grant identical access. Verification of the signer, amount, recipient and nonce must be added in the same change that introduces a non-zero price. The same applies to `/api/search`, which serves the same results without a payment header while the service is free.
+`/api/a2mcp/media-search` verifies the authorization cryptographically. It recovers the signer over the `TransferWithAuthorization` struct against the token's EIP-712 domain and rejects anything that does not recover to `from`; it checks the scheme, network, asset, recipient, signed value and validity window against the offer it published; it claims the `(from, nonce)` pair so a signed header cannot be replayed before settlement confirms on chain; and it asks the OKX facilitator to verify before serving and to settle only after the work succeeds. Missing facilitator credentials fail the request closed with `503`.
+
+At the current price of 0 nothing settles, and the receipt says `no_settlement_required` rather than claiming a transaction. Raising `OKX_PAYMENT_AMOUNT` turns settlement on with no other change; the listing fee must be raised to match.
+
+`/api/search` and `/api/agent/search` run the same provider search and return the same product, so they sit behind the same gate and require the same EIP-3009 authorization. The gate lives in one place (`servePaidSearch`) rather than being copied per route, because a copy that drifted — or a route that forgot it — is a way around the gate.
 
 ## Operational guardrails
 
@@ -110,10 +122,17 @@ There is no page to open. Check the service is up with:
 curl http://localhost:3000/api/health
 ```
 
-and call it the way an agent would:
+The search routes require an EIP-3009 authorization, so the way to exercise them locally
+is the self-check, which signs one with a throwaway key and drives the whole handshake:
 
 ```bash
-curl -X POST http://localhost:3000/api/search -H "Content-Type: application/json" -d "{\"query\":\"happy birthday music\"}"
+node scripts/x402-selfcheck.mjs http://localhost:3000
+```
+
+`/api/brief` is ungated and normalises a request without running a provider search:
+
+```bash
+curl -X POST http://localhost:3000/api/brief -H "Content-Type: application/json" -d "{\"query\":\"happy birthday music\"}"
 ```
 
 The app loads `local.env` first, then `.env`, then process environment variables. Do not commit real secrets.
@@ -135,7 +154,8 @@ Minimum useful production variables:
 - `FREESOUND_API_KEY`
 - `JAMENDO_CLIENT_ID`
 - Supabase variables if private history and evidence storage are enabled
-- `PAY_TO_ADDRESS`, `OKX_PAYMENT_TOKEN_ADDRESS`, `OKX_PAYMENT_AMOUNT=0` for the zero-fee x402 challenge
+- `PAY_TO_ADDRESS`, `OKX_PAYMENT_TOKEN_ADDRESS`, `OKX_PAYMENT_AMOUNT` for the x402 challenge
+- `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE` — required, or every paid call fails closed
 
 Both OpenRouter models must support strict JSON-schema structured outputs. If a replacement model does not, `parse_brief` fails and every request silently degrades to the local parser — check `/api/health` (`brain.models`) and the `[openrouter]` log lines for `"success":false` to confirm which model is in use and why it fell back.
 
@@ -162,7 +182,7 @@ supabase/               Database migration for evidence and procurement records
 - ZitoAI does not invent licenses, receipts, or legal clearance.
 - Provider terms control the actual rights.
 - Evidence Packs record proof supplied by provider APIs, receipts, and user supplied checkout evidence. They do not create new rights.
-- Paid provider purchases remain separate from the zero-fee A2MCP call and must be backed by provider evidence.
+- Paid provider purchases remain separate from the A2MCP call fee and must be backed by provider evidence. Paying the call fee does not license the assets it returns.
 
 ## Documentation
 

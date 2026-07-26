@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
-import { buildX402Challenge, hasX402PaymentProof, paymentResponseHeaders, paymentStatus, x402ChallengeHeaders } from "./services/x402-payment.js";
+import { buildX402Challenge, isFacilitatorConfigured, paymentResponseHeaders, paymentStatus, settlePayment, verifyPaymentAuthorization, x402ChallengeHeaders } from "./services/x402-payment.js";
 import { brainStatus, normalizeBrief, restoreSpendFromStore } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
@@ -50,7 +50,7 @@ const serviceDescriptor = () => ({
   payment: {
     protocol: "OKX Agent Payments Protocol",
     price: paymentStatus().price,
-    note: "Unpaid requests receive a 402 challenge. Complete the pay-and-replay handshake, then POST the request again.",
+    note: "Unpaid requests receive a 402 challenge. Sign the accepts entry as an EIP-3009 transferWithAuthorization, then POST the request again with a PAYMENT-SIGNATURE header.",
   },
 });
 
@@ -71,7 +71,7 @@ const agentCard = {
       price: paymentStatus().price,
       paymentRequired: true,
       x402: true,
-      description: "Zero-fee x402 access to rights-aware search across licensable images, sound effects, music tracks, and ambience.",
+      description: "Per-call x402 access to rights-aware search across licensable images, sound effects, music tracks, and ambience, authorized with EIP-3009.",
     },
   ],
   safety: { paymentRequiresUserConfirmation: false, legalAdvice: false },
@@ -205,28 +205,32 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/brief") {
       return json(response, 200, await normalizeBrief(await readJson(request)));
     }
+    // Both of these run the same provider search as the A2MCP route and return the same
+    // product, so they sit behind the same gate. Ungated, they were simply a way around
+    // it — free while the price is 0, and an outright bypass the moment it is not.
     if (request.method === "POST" && url.pathname === "/api/search") {
-      return json(response, 200, await searchAssets(await readJson(request)));
+      return servePaidSearch(request, response, "/api/search", (result) => result);
     }
     if (request.method === "POST" && url.pathname === "/api/agent/search") {
-      return json(response, 200, { ...(await searchAssets(await readJson(request))), agent: "ZitoAI", role: "ASP", protocol: "A2MCP", paymentRequired: true, x402: true });
+      return servePaidSearch(request, response, "/api/agent/search", (result) => ({
+        ...result,
+        agent: "ZitoAI",
+        role: "ASP",
+        protocol: "A2MCP",
+        paymentRequired: true,
+        x402: true,
+      }));
     }
     if (url.pathname === "/api/a2mcp/media-search") {
-      if (!hasX402PaymentProof(request)) {
-        const challenge = buildX402Challenge({
-          resource: `${config.aspBaseUrl.replace(/\/+$/, "")}/api/a2mcp/media-search`,
-          method: "POST",
-        });
-        return json(response, 402, challenge, x402ChallengeHeaders(challenge));
-      }
+      // Checked before payment: a payer should not be asked to sign an authorization for
+      // a request that was never going to be served.
       if (request.method !== "POST") {
-        return json(response, 405, { error: "Use POST with a JSON body after completing the x402 pay-and-replay handshake." });
+        const unpaid = buildChallengeFor("/api/a2mcp/media-search");
+        return json(response, 402, unpaid, x402ChallengeHeaders(unpaid));
       }
-      const body = wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request)));
-      // The settlement side of the handshake. Clients are told to read PAYMENT-RESPONSE
-      // after a successful replay; without it a caller following the protocol finds the
-      // header advertised in CORS but never sent.
-      return json(response, 200, body, paymentResponseHeaders(request));
+      return servePaidSearch(request, response, "/api/a2mcp/media-search", (result) =>
+        wrapA2McpResult("rights-media-search", result),
+      );
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/evidence-manifest") {
       return json(response, 200, wrapA2McpResult("license-evidence-manifest", buildEvidenceManifest(await readJson(request))));
@@ -386,6 +390,20 @@ server.listen(config.port, async () => {
   console.log(`ZitoAI running at http://localhost:${config.port} on Node ${process.versions.node}`);
   assertRuntimeVersion();
   console.log(`OpenRouter: ${brainStatus().configured ? "configured" : "local fallback"}`);
+  // Loud, because without it the paid endpoint cannot verify or settle anything and will
+  // refuse every call — a failure worth seeing at boot rather than from the first payer.
+  const payment = paymentStatus();
+  console.log(
+    isFacilitatorConfigured()
+      ? `x402: exact/EIP-3009, ${payment.price} per call, settling via ${config.payment.baseUrl}`
+      : "x402: NOT CONFIGURED — set OKX_API_KEY, OKX_SECRET_KEY and OKX_PASSPHRASE or paid calls will fail",
+  );
+  // Real funds land here, so the receiving address is printed either way — and named as a
+  // built-in default when PAY_TO_ADDRESS is unset, so a deployment that meant to override
+  // it can see at a glance that it did not.
+  console.log(
+    `x402: paying to ${payment.payToAddress}${payment.payToConfigured ? "" : " (built-in default, PAY_TO_ADDRESS unset)"}`,
+  );
   // Resumes the persisted spend total so a redeploy does not hand out a fresh budget.
   // Awaited here rather than at import time so a slow database never delays listening.
   const restored = await restoreSpendFromStore().catch(() => null);
@@ -463,6 +481,56 @@ async function readJson(request) {
 // path-traversal surface that came with it: there is no filesystem read reachable from a
 // URL any more.
 
+function buildChallengeFor(resourcePath) {
+  return buildX402Challenge({
+    resource: `${config.aspBaseUrl.replace(/\/+$/, "")}${resourcePath}`,
+    method: "POST",
+  });
+}
+
+/**
+ * The x402 gate, shared by every route that runs a real provider search.
+ *
+ * It lives in one place on purpose: these routes return the same product, so a second
+ * copy of this logic that drifted — or a route that simply forgot it — is a way around
+ * the gate rather than a separate feature.
+ *
+ * `shape` lets each route present the same result in its own envelope without getting a
+ * say in whether the caller was authorized.
+ */
+async function servePaidSearch(request, response, resourcePath, shape) {
+  // Every failure re-issues a challenge, so a client whose signature expired or was
+  // rejected gets fresh terms in the same response it learns about the problem from,
+  // rather than having to go back for another 402.
+  const verified = await verifyPaymentAuthorization(request);
+  if (!verified.ok) {
+    const retry = buildChallengeFor(resourcePath);
+    return json(
+      response,
+      verified.status,
+      { ...retry, error: verified.reason, message: verified.message },
+      x402ChallengeHeaders(retry),
+    );
+  }
+
+  const body = shape(await searchAssets(await readJson(request)));
+
+  // Settled only now that the work has succeeded. Charging first would take the payer's
+  // money for a search that then threw, and the authorization is good until it expires,
+  // so there is nothing to lose by waiting.
+  const settlement = await settlePayment(verified);
+  if (settlement?.success === false) {
+    const retry = buildChallengeFor(resourcePath);
+    return json(
+      response,
+      402,
+      { ...retry, error: settlement.errorReason || "settlement_failed", message: settlement.errorMessage },
+      { ...x402ChallengeHeaders(retry), ...paymentResponseHeaders(settlement, verified) },
+    );
+  }
+  return json(response, 200, body, paymentResponseHeaders(settlement, verified));
+}
+
 function securityHeaders(headers) {
   return {
     ...headers,
@@ -472,8 +540,9 @@ function securityHeaders(headers) {
   };
 }
 
-// The A2MCP endpoint is a public, unauthenticated, zero-fee API, so any origin may call
-// it. Nothing here is cookie- or session-authenticated across origins: the Supabase
+// The A2MCP endpoint is public and open to any origin: access is gated by a signed
+// EIP-3009 authorization in a request header, not by where the call came from. Nothing
+// here is cookie- or session-authenticated across origins: the Supabase
 // routes take a Bearer token, so credentials are never sent ambiently and
 // Allow-Credentials stays off.
 function corsHeaders(request, headers = {}) {
