@@ -50,15 +50,46 @@ test("an asset is scored on what the provider says it is about", () => {
 
 test("scoring reads every field a provider describes an asset with", () => {
   const concepts = ["thunder"];
-  const byTitle = { title: "Thunder rolling", metadata: {} };
-  const byTag = { title: "Untitled 4", metadata: { tags: ["storm", "thunder"] } };
-  const byMusicInfo = { title: "Untitled 5", metadata: { musicinfo: { tags: { vartags: ["thunder"] } } } };
-  const byKeyword = { title: "Untitled 6", metadata: { keywords: ["thunder"] } };
-  const byDescription = { title: "Untitled 7", metadata: { description: "distant thunder over a field" } };
+  const assets = [
+    ["title", { title: "Thunder rolling", metadata: {} }],
+    ["tags", { title: "Untitled 4", metadata: { tags: ["storm", "thunder"] } }],
+    ["tags", { title: "Untitled 5", metadata: { musicinfo: { tags: { vartags: ["thunder"] } } } }],
+    ["tags", { title: "Untitled 6", metadata: { keywords: ["thunder"] } }],
+    ["description", { title: "Untitled 7", metadata: { description: "distant thunder over a field" } }],
+  ];
 
-  for (const asset of [byTitle, byTag, byMusicInfo, byKeyword, byDescription]) {
-    assert.equal(scoreAssetRelevance(asset, concepts).strength, "strong", `${asset.title} should match`);
+  for (const [expectedField, asset] of assets) {
+    const scored = scoreAssetRelevance(asset, concepts);
+    assert.deepEqual(scored.matched, ["thunder"], `${asset.title}: every field is searched`);
+    assert.equal(scored.matchedIn.thunder, expectedField, `${asset.title}: reports where it matched`);
   }
+});
+
+// A provider names an asset after its subject. "SpringGardenApril" with rain in its tags
+// is not the same answer as "Rain Falling On The Greenhouse", and ranking them equally
+// made a correct-but-weak result read as a mistake.
+test("where a concept appears decides how much it counts", () => {
+  const concepts = ["rain"];
+  const inTitle = scoreAssetRelevance({ title: "Rain Falling On The Greenhouse", metadata: {} }, concepts);
+  const inTags = scoreAssetRelevance({ title: "SpringGardenApril", metadata: { tags: ["rain", "garden"] } }, concepts);
+  const inDescription = scoreAssetRelevance({ title: "Morning Field", metadata: { description: "distant rain" } }, concepts);
+
+  assert.ok(inTitle.score > inTags.score, "a title match beats a tag match");
+  assert.ok(inTags.score > inDescription.score, "a tag match beats a description match");
+
+  assert.equal(inTitle.strength, "strong");
+  // Only reachable through tags or prose, so it is offered as related, not as the answer.
+  assert.equal(inTags.strength, "partial");
+  assert.equal(inDescription.strength, "partial");
+});
+
+test("a tag-only match ranks below a title match", () => {
+  const concepts = ["rain"];
+  const tagOnly = { id: "tag", title: "SpringGardenApril", policy: {}, metadata: { tags: ["rain"] } };
+  const titled = { id: "title", title: "Rain Falling On The Greenhouse", policy: {}, metadata: {} };
+
+  const ranked = relevanceRank([tagOnly, titled].map((a) => ({ ...a, relevance: scoreAssetRelevance(a, concepts) })));
+  assert.equal(ranked[0].id, "title", "the obviously-relevant result comes first");
 });
 
 test("matching tolerates plurals and simple word forms", () => {

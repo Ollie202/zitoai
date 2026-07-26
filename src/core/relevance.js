@@ -44,26 +44,31 @@ export function extractConcepts(...sources) {
   return concepts.slice(0, 8);
 }
 
-// Everything about an asset a provider might have described it with.
-function assetText(asset) {
+// Where a concept appears decides how much it counts.
+//
+// Pooling every field equally meant a track called "SpringGardenApril", with "rain"
+// buried in its tags, scored the same as one called "Rain Falling On The Greenhouse".
+// Both technically contain the concept; only one is obviously the thing that was asked
+// for. A provider names an asset after its subject, so the title is the strongest signal
+// available and a tag is the weakest.
+const FIELD_WEIGHTS = { title: 1, tags: 0.6, description: 0.4 };
+
+function assetFields(asset) {
   const metadata = asset.metadata || {};
-  const tags = Array.isArray(metadata.tags) ? metadata.tags.join(" ") : "";
+  const list = (value) => (Array.isArray(value) ? value.join(" ") : "");
   const musicTags = metadata.musicinfo?.tags
     ? Object.values(metadata.musicinfo.tags).flat().filter(Boolean).join(" ")
     : "";
-  const keywords = Array.isArray(metadata.keywords) ? metadata.keywords.join(" ") : "";
   const categories = Array.isArray(metadata.categories)
     ? metadata.categories.map((category) => category?.name || category).filter(Boolean).join(" ")
     : "";
-  return [
-    asset.title,
-    metadata.album,
-    metadata.description,
-    tags,
-    musicTags,
-    keywords,
-    categories,
-  ].filter(Boolean).join(" ").toLowerCase();
+
+  return {
+    // Album sits with the title: it names the work, not an attribute of it.
+    title: [asset.title, metadata.album].filter(Boolean).join(" ").toLowerCase(),
+    tags: [list(metadata.tags), musicTags, list(metadata.keywords), categories].filter(Boolean).join(" ").toLowerCase(),
+    description: String(metadata.description || "").toLowerCase(),
+  };
 }
 
 // Substring containment is intentional here, unlike the brief parser's word-boundary
@@ -80,19 +85,46 @@ export function scoreAssetRelevance(asset, concepts) {
   const wanted = (concepts || []).filter(Boolean);
   if (!wanted.length) {
     // Nothing to check against. Say so rather than implying a verified match.
-    return { strength: "unscored", score: null, matched: [], missing: [] };
+    return { strength: "unscored", score: null, matched: [], missing: [], matchedIn: {} };
   }
 
-  const haystack = assetText(asset);
-  const matched = wanted.filter((concept) => conceptMatches(haystack, concept));
-  const missing = wanted.filter((concept) => !matched.includes(concept));
-  const score = matched.length / wanted.length;
+  const fields = assetFields(asset);
+  const matched = [];
+  const missing = [];
+  const matchedIn = {};
+  let weightedTotal = 0;
+
+  for (const concept of wanted) {
+    // Best field wins: a concept in the title is not diluted by its absence elsewhere.
+    let best = 0;
+    let bestField = null;
+    for (const [field, weight] of Object.entries(FIELD_WEIGHTS)) {
+      if (weight > best && conceptMatches(fields[field], concept)) {
+        best = weight;
+        bestField = field;
+      }
+    }
+    if (bestField) {
+      matched.push(concept);
+      matchedIn[concept] = bestField;
+      weightedTotal += best;
+    } else {
+      missing.push(concept);
+    }
+  }
+
+  const score = weightedTotal / wanted.length;
 
   return {
+    // A title match on most concepts clears 0.66; matches living only in tags and
+    // descriptions no longer reach "strong" on their own.
     strength: score >= 0.66 ? "strong" : score > 0 ? "partial" : "weak",
     score: Number(score.toFixed(2)),
     matched,
     missing,
+    // Says which field carried each match, so a title that looks unrelated can show why
+    // it was included rather than reading as a mistake.
+    matchedIn,
   };
 }
 
