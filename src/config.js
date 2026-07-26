@@ -29,7 +29,13 @@ export const config = {
     // name "USD₮0" and version "1" reproduces 0xd591d9ba… exactly.
     assetName: process.env.OKX_PAYMENT_ASSET_NAME || "USD₮0",
     assetVersion: process.env.OKX_PAYMENT_ASSET_VERSION || "1",
+    // Verified on chain: the token's decimals() returns 6. Declared in the challenge so a
+    // client never has to infer the scale to reconcile the price — a reviewer hit
+    // "expected 0 USDT ~ ? minimal units" because the conversion had nothing to work from.
+    assetDecimals: Number(process.env.OKX_PAYMENT_ASSET_DECIMALS || 6),
     amount: process.env.OKX_PAYMENT_AMOUNT || "0",
+    // How long a challenge stays valid. Clients use it to size the signature window.
+    maxTimeoutSeconds: Number(process.env.OKX_PAYMENT_MAX_TIMEOUT_SECONDS || 300),
     priceUsd: process.env.OKX_PAYMENT_PRICE_USD || "0 USDT",
     syncSettle: parseBoolean(process.env.OKX_PAYMENT_SYNC_SETTLE),
   },

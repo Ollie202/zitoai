@@ -41,6 +41,12 @@ export function buildX402Challenge(options = {}) {
     asset: config.payment.assetAddress,
     amount: String(config.payment.amount || "0"),
     maxAmountRequired: String(config.payment.amount || "0"),
+    // The scale and the human-readable price, stated rather than left to be inferred.
+    // Without these a client reconciling a listed "0 USDT" against a minimal-unit "0"
+    // has nothing to convert with, which produced "expected 0 USDT ~ ? minimal units".
+    decimals: config.payment.assetDecimals,
+    amountHuman: humanAmount(config.payment.amount, config.payment.assetDecimals),
+    maxTimeoutSeconds: config.payment.maxTimeoutSeconds,
     payTo: getPayToAddress(),
     resource,
     description: "ZitoAI rights aware media search",
@@ -99,6 +105,21 @@ export function hasX402PaymentProof(request) {
       getHeader(request, "payment") ||
       authorization.toLowerCase().startsWith("payment "),
   );
+}
+
+// Minimal units to a decimal string, without floating point. A zero price must render as
+// "0" rather than an empty or unknown value, since that is the case a client is most
+// likely to choke on.
+function humanAmount(minimalUnits, decimals) {
+  const raw = String(minimalUnits ?? "0").trim();
+  if (!/^\d+$/.test(raw)) return "0";
+  const scale = Number.isInteger(decimals) && decimals >= 0 ? decimals : 0;
+  if (scale === 0) return raw;
+
+  const padded = raw.padStart(scale + 1, "0");
+  const whole = padded.slice(0, padded.length - scale);
+  const fraction = padded.slice(padded.length - scale).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole;
 }
 
 function getPayToAddress() {
