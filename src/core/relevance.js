@@ -53,6 +53,19 @@ export function extractConcepts(...sources) {
 // available and a tag is the weakest.
 const FIELD_WEIGHTS = { title: 1, tags: 0.6, description: 0.4 };
 
+// Strength is decided by two questions, not by the weighted score.
+//
+// Tuning a single threshold could not separate the cases: normalising by concept count
+// means one tag match scores 0.6 against one concept but 0.2 against three, so any cutoff
+// admitting a genuine two-of-three match also admitted a lone tag hit.
+//
+//   Coverage — did most of what was asked for actually appear?
+//   Title    — does the asset's own name carry at least one of those concepts?
+//
+// Both must hold. The weighted score still orders results within a strength band, where
+// field quality is exactly the right tiebreak.
+const STRONG_COVERAGE = 0.66;
+
 function assetFields(asset) {
   const metadata = asset.metadata || {};
   const list = (value) => (Array.isArray(value) ? value.join(" ") : "");
@@ -114,11 +127,12 @@ export function scoreAssetRelevance(asset, concepts) {
   }
 
   const score = weightedTotal / wanted.length;
+  const coverage = matched.length / wanted.length;
+  const namedInTitle = Object.values(matchedIn).includes("title");
 
   return {
-    // A title match on most concepts clears 0.66; matches living only in tags and
-    // descriptions no longer reach "strong" on their own.
-    strength: score >= 0.66 ? "strong" : score > 0 ? "partial" : "weak",
+    strength: coverage >= STRONG_COVERAGE && namedInTitle ? "strong" : matched.length ? "partial" : "weak",
+    coverage: Number(coverage.toFixed(2)),
     score: Number(score.toFixed(2)),
     matched,
     missing,

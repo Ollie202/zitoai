@@ -83,6 +83,29 @@ test("where a concept appears decides how much it counts", () => {
   assert.equal(inDescription.strength, "partial");
 });
 
+// Threshold tuning alone could not separate these: normalising by concept count means one
+// tag match scores 0.6 against a single concept but 0.2 against three, so any cutoff that
+// admitted a genuine two-of-three match also admitted a lone tag hit. Strength is decided
+// by coverage plus a title gate instead.
+test("strength needs most concepts present AND the title to carry one", () => {
+  const three = ["rain", "meditation", "calm"];
+
+  // Two of three, with rain in the title — a real match.
+  assert.equal(scoreAssetRelevance(
+    { title: "Ethereal Rain Atmosphere", metadata: { tags: ["meditation"] } }, three,
+  ).strength, "strong");
+
+  // Full coverage, but the concept only ever appears in a tag: still not the answer.
+  assert.equal(scoreAssetRelevance(
+    { title: "SpringGardenApril", metadata: { tags: ["rain"] } }, ["rain"],
+  ).strength, "partial", "a tag-only match cannot be strong at any concept count");
+
+  // Title match, but half the request is missing.
+  assert.equal(scoreAssetRelevance(
+    { title: "Celebration Groove", metadata: { tags: ["celebration"] } }, ["birthday", "celebration"],
+  ).strength, "partial", "a title match alone does not make up for missing concepts");
+});
+
 test("a tag-only match ranks below a title match", () => {
   const concepts = ["rain"];
   const tagOnly = { id: "tag", title: "SpringGardenApril", policy: {}, metadata: { tags: ["rain"] } };
