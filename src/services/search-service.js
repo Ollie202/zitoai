@@ -42,18 +42,23 @@ export async function searchAssets(input) {
   // multiply into a large number of upstream requests.
   const alternates = (Array.isArray(brief.alternateQueries) ? brief.alternateQueries : []).slice(0, MAX_ALTERNATE_ATTEMPTS);
   for (const alternate of alternates) {
-    if (summary.quality === "strong") break;
+    // Two reasons to try another phrasing: nothing matched, or barely anything came back.
+    // Quality alone was not enough — a single result that happens to score strong ended
+    // the loop and handed the caller one file when they asked for six.
+    if (summary.quality === "strong" && results.length >= enoughResults(limit)) break;
     const phrasing = String(alternate || "").trim();
     if (!phrasing || attemptedQueries.some((q) => q.toLowerCase() === phrasing.toLowerCase())) continue;
 
     attemptedQueries.push(phrasing);
     const retry = await runSearch(selected, rankedProviders, { ...brief, query: phrasing }, limit);
-    const retrySummary = summariseMatchQuality(retry.results);
-    if (isBetterMatch(retrySummary, summary)) {
-      results = retry.results;
-      providerStatus = retry.providerStatus;
-      summary = retrySummary;
-      brief.query = phrasing;
+
+    // Merged, not replaced. A rephrasing that finds five more results should not discard
+    // the good one the first phrasing already found.
+    const merged = mergeResults(results, retry.results, limit);
+    if (merged.length > results.length) {
+      results = merged;
+      providerStatus = mergeProviderStatus(providerStatus, retry.providerStatus);
+      summary = summariseMatchQuality(results);
       brief.usedAlternateQuery = true;
     }
   }
@@ -97,11 +102,39 @@ export async function searchAssets(input) {
   };
 }
 
-// Prefers more genuinely matching results, then more partial ones. A retry only replaces
-// the first attempt when it is actually better, so a worse rephrasing cannot win.
-function isBetterMatch(candidate, current) {
-  if (candidate.strongCount !== current.strongCount) return candidate.strongCount > current.strongCount;
-  return candidate.partialCount > current.partialCount;
+// A caller asking for six wants options, not one perfect file. Below this, a search is
+// treated as thin and worth another phrasing even when what came back was on target.
+function enoughResults(limit) {
+  return Math.min(limit, 3);
+}
+
+// Combines attempts, keeping the first sighting of each asset and stopping at the limit
+// the caller asked for. Deduplicated by provider and id, because two phrasings of the
+// same intent frequently surface the same file.
+function mergeResults(current, incoming, limit) {
+  const merged = [...current];
+  const seen = new Set(current.map((asset) => `${asset.provider}:${asset.id}`));
+  for (const asset of incoming) {
+    if (merged.length >= limit) break;
+    const key = `${asset.provider}:${asset.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(asset);
+  }
+  return merged;
+}
+
+// Keeps one row per provider, preferring a successful attempt over a failed one and
+// carrying the higher count, so the reported per-provider totals match the merged set.
+function mergeProviderStatus(current, incoming) {
+  const byId = new Map(current.map((entry) => [entry.id, entry]));
+  for (const entry of incoming) {
+    const existing = byId.get(entry.id);
+    if (!existing || (!existing.ok && entry.ok) || (entry.count || 0) > (existing.count || 0)) {
+      byId.set(entry.id, entry);
+    }
+  }
+  return [...byId.values()];
 }
 
 async function runSearch(selected, rankedProviders, brief, limit) {

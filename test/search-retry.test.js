@@ -80,9 +80,13 @@ test("a catalogue miss is retried with different wording", withBrief(BIRTHDAY_BR
   }
 }));
 
-test("a good first result is not retried, so no wasted provider calls", withBrief(BIRTHDAY_BRIEF, async () => {
+test("enough good results ends the search, so no wasted provider calls", withBrief(BIRTHDAY_BRIEF, async () => {
   const stub = stubJamendo({
-    "birthday celebration song": [track("1", "Happy Birthday Celebration", ["birthday", "celebration"])],
+    "birthday celebration song": [
+      track("1", "Happy Birthday Celebration", ["birthday", "celebration"]),
+      track("2", "Birthday Party", ["birthday", "celebration"]),
+      track("3", "Birthday Waltz", ["birthday", "celebration"]),
+    ],
   });
 
   try {
@@ -90,6 +94,47 @@ test("a good first result is not retried, so no wasted provider calls", withBrie
     assert.deepEqual(stub.queries, ["birthday celebration song"], "one search is enough");
     assert.equal(result.processing.usedAlternateQuery, false);
     assert.equal(result.matchQuality.quality, "strong");
+  } finally {
+    stub.restore();
+  }
+}));
+
+// The gap this closes: a single result that happened to score strong ended the retry
+// loop, so a caller asking for six was handed one file and told it was a strong match.
+test("a thin result set is retried even when what came back was on target", withBrief(BIRTHDAY_BRIEF, async () => {
+  const stub = stubJamendo({
+    "birthday celebration song": [track("1", "Birthday Celebration", ["birthday", "celebration"])],
+    "happy birthday music": [
+      track("2", "Happy Birthday", ["birthday", "celebration"]),
+      track("3", "Birthday Song", ["birthday", "celebration"]),
+    ],
+  });
+
+  try {
+    const result = await searchAssets({ query: "birthday music", limit: 6 });
+    assert.ok(stub.queries.length > 1, "one on-target result is not enough to stop");
+    // Merged, not replaced: the first phrasing's result survives alongside the new ones.
+    assert.equal(result.count, 3);
+    assert.deepEqual(result.results.map((a) => a.id).sort(), ["1", "2", "3"]);
+  } finally {
+    stub.restore();
+  }
+}));
+
+test("merging never exceeds the requested limit or repeats an asset", withBrief(BIRTHDAY_BRIEF, async () => {
+  const shared = track("1", "Birthday Celebration", ["birthday", "celebration"]);
+  const stub = stubJamendo({
+    "birthday celebration song": [shared],
+    // The same file surfacing again under a different phrasing is common.
+    "happy birthday music": [shared, track("2", "Happy Birthday", ["birthday", "celebration"])],
+    "party music": [track("3", "Party Time", ["birthday", "celebration"]), track("4", "Celebrate", ["birthday"])],
+  });
+
+  try {
+    const result = await searchAssets({ query: "birthday music", limit: 3 });
+    assert.equal(result.count, 3, "capped at the requested limit");
+    const ids = result.results.map((a) => a.id);
+    assert.equal(new Set(ids).size, ids.length, "no duplicates across attempts");
   } finally {
     stub.restore();
   }
