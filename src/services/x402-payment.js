@@ -45,6 +45,15 @@ export function buildX402Challenge(options = {}) {
     resource,
     description: "ZitoAI rights aware media search",
     mimeType: "application/json",
+    // The EIP-712 domain a payer needs to sign an EIP-3009
+    // transferWithAuthorization. The challenge previously omitted these, so no valid
+    // EIP-3009 authorization could be constructed against it — which is what the OKX
+    // listing review caught. The token exposes TRANSFER_WITH_AUTHORIZATION_TYPEHASH,
+    // so EIP-3009 is the correct authorization method for it.
+    extra: {
+      name: config.payment.assetName,
+      version: config.payment.assetVersion,
+    },
     outputSchema: {
       input: {
         type: "http",

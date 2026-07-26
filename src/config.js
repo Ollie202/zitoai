@@ -22,6 +22,13 @@ export const config = {
       process.env.OKX_PAYMENT_ASSET ||
       process.env.OKX_PAYMENT_TOKEN_ADDRESS ||
       "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+    // EIP-712 domain of the payment token, required for EIP-3009
+    // transferWithAuthorization. A payer builds the signature from these, so omitting
+    // them means no valid EIP-3009 authorization can be produced against this challenge.
+    // Verified against the token's on-chain DOMAIN_SEPARATOR: recomputing it with
+    // name "USD₮0" and version "1" reproduces 0xd591d9ba… exactly.
+    assetName: process.env.OKX_PAYMENT_ASSET_NAME || "USD₮0",
+    assetVersion: process.env.OKX_PAYMENT_ASSET_VERSION || "1",
     amount: process.env.OKX_PAYMENT_AMOUNT || "0",
     priceUsd: process.env.OKX_PAYMENT_PRICE_USD || "0 USDT",
     syncSettle: parseBoolean(process.env.OKX_PAYMENT_SYNC_SETTLE),

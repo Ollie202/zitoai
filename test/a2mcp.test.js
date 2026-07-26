@@ -60,3 +60,22 @@ test("x402 payment proof detection works with Node server headers", () => {
   assert.equal(hasX402PaymentProof({ headers: { "x-payment": "proof" } }), true);
   assert.equal(hasX402PaymentProof({ headers: { "payment-signature": "proof" } }), true);
 });
+
+// The listing was rejected because the challenge declared no EIP-712 domain, so no payer
+// could construct an EIP-3009 transferWithAuthorization against it. `exact` carrying
+// extra.name (and no permit2 marker) is what identifies EIP-3009 as the method.
+test("the x402 challenge declares the EIP-3009 domain", () => {
+  const [offer] = buildX402Challenge().accepts;
+
+  assert.equal(offer.scheme, "exact");
+  assert.ok(offer.extra, "an exact offer without extra cannot be signed as EIP-3009");
+  assert.equal(offer.extra.name, "USD₮0", "EIP-712 domain name of the payment token");
+
+  // Verified against the token's on-chain DOMAIN_SEPARATOR: recomputing it with
+  // name "USD₮0" and version "1" reproduces 0xd591d9ba… exactly. The documented default
+  // is "2", which would produce a signature that can never verify against this token.
+  assert.equal(offer.extra.version, "1");
+
+  // permit2 would select the wrong authorization method entirely.
+  assert.notEqual(offer.extra.assetTransferMethod, "permit2");
+});
