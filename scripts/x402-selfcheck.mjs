@@ -4,6 +4,7 @@
 // resubmitting a listing.
 //
 //   node scripts/x402-selfcheck.mjs [base-url]
+import { randomBytes } from "node:crypto";
 import { privateKeyToAccount } from "viem/accounts";
 
 const base = (process.argv[2] || "http://localhost:3000").replace(/\/+$/, "");
@@ -71,7 +72,10 @@ const authorization = {
   value: offer.amount,
   validAfter: String(now - 5),
   validBefore: String(now + offer.maxTimeoutSeconds),
-  nonce: `0x${"11".repeat(32)}`,
+  // Fresh every run. A fixed nonce made the script single-use: the second run was
+  // correctly refused as a replay, which reads like a broken endpoint rather than working
+  // replay protection.
+  nonce: `0x${randomBytes(32).toString("hex")}`,
 };
 const signature = await payer.signTypedData({
   domain: {
@@ -118,6 +122,21 @@ const genuine = await fetch(endpoint, {
 });
 const genuineBody = await genuine.json().catch(() => ({}));
 check("a genuine EIP-3009 authorization is served", genuine.status === 200, `got ${genuine.status} ${genuineBody.error || ""}`);
+
+// 5. The same authorization a second time. The chain only rejects a reused nonce once the
+//    first settlement confirms, so the service has to refuse it in the meantime.
+if (genuine.status === 200) {
+  const replay = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "PAYMENT-SIGNATURE": encode({ x402Version: 2, accepted: offer, payload: { authorization, signature } }),
+    },
+    body: JSON.stringify({ query: "rain on a window" }),
+  });
+  const replayBody = await replay.json().catch(() => ({}));
+  check("replaying the same authorization is refused", replay.status !== 200, `got ${replay.status} ${replayBody.error || ""}`);
+}
 
 const receiptHeader = genuine.headers.get("payment-response");
 if (receiptHeader) {
