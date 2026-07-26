@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { config } from "../src/config.js";
 import { buildA2McpManifest, wrapA2McpResult } from "../src/services/a2mcp.js";
-import { buildX402Challenge, hasX402PaymentProof } from "../src/services/x402-payment.js";
+import { buildX402Challenge, hasX402PaymentProof, buildPaymentResponse } from "../src/services/x402-payment.js";
 
 test("A2MCP manifest exposes ZitoAI as a zero-fee x402 ASP service provider", () => {
   const manifest = buildA2McpManifest();
@@ -61,6 +61,42 @@ test("x402 challenge contains the registered X Layer USDT zero-fee accept", () =
   assert.equal(challenge.accepts[0].resource, undefined);
   assert.equal(challenge.resource.url.endsWith("/api/a2mcp/media-search"), true);
   assert.equal(challenge.accepts[0].outputSchema.input.method, "POST");
+});
+
+// Clients are told to read PAYMENT-RESPONSE after a successful replay. The header was
+// advertised in Access-Control-Expose-Headers but never sent, so a caller following the
+// protocol found nothing there.
+test("a paid replay reports settlement in PAYMENT-RESPONSE", () => {
+  const proof = Buffer.from(JSON.stringify({
+    payload: { authorization: { from: "0xabc0000000000000000000000000000000000001", nonce: "0xfeed" } },
+  })).toString("base64");
+
+  const receipt = buildPaymentResponse({ headers: { "payment-signature": proof } });
+
+  assert.equal(receipt.x402Version, 2);
+  assert.equal(receipt.scheme, "exact");
+  assert.equal(receipt.amount, "0");
+  assert.equal(receipt.amountHuman, "0");
+  assert.equal(receipt.payer, "0xabc0000000000000000000000000000000000001", "the payer is read from their own proof");
+  assert.equal(receipt.nonce, "0xfeed");
+
+  // Nothing moves on chain at a zero price, and claiming a settlement that did not
+  // happen would be worse than reporting none.
+  assert.equal(receipt.transaction, null);
+  assert.equal(receipt.status, "no_settlement_required");
+});
+
+test("a v1 proof and a malformed proof both still yield a receipt", () => {
+  // v1 carries the authorization at the top level rather than under payload.
+  const v1 = Buffer.from(JSON.stringify({ authorization: { from: "0xdef0000000000000000000000000000000000002" } })).toString("base64");
+  assert.equal(buildPaymentResponse({ headers: { "x-payment": v1 } }).payer, "0xdef0000000000000000000000000000000000002");
+
+  // Decoding only enriches the response, so garbage must never fail the request.
+  for (const bad of ["not-base64!!", "", Buffer.from("{not json").toString("base64")]) {
+    const receipt = buildPaymentResponse({ headers: { "x-payment": bad } });
+    assert.equal(receipt.payer, null);
+    assert.equal(receipt.status, "no_settlement_required");
+  }
 });
 
 test("x402 payment proof detection works with Node server headers", () => {

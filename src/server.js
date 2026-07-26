@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
 import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
-import { buildX402Challenge, hasX402PaymentProof, paymentStatus, x402ChallengeHeaders } from "./services/x402-payment.js";
+import { buildX402Challenge, hasX402PaymentProof, paymentResponseHeaders, paymentStatus, x402ChallengeHeaders } from "./services/x402-payment.js";
 import { brainStatus, normalizeBrief, restoreSpendFromStore } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
 import { buildEvidenceManifest, buildEvidencePdf, evidenceHash } from "./services/evidence-pack.js";
@@ -223,7 +223,10 @@ const server = createServer(async (request, response) => {
         return json(response, 405, { error: "Use POST with a JSON body after completing the x402 pay-and-replay handshake." });
       }
       const body = wrapA2McpResult("rights-media-search", await searchAssets(await readJson(request)));
-      return json(response, 200, body);
+      // The settlement side of the handshake. Clients are told to read PAYMENT-RESPONSE
+      // after a successful replay; without it a caller following the protocol finds the
+      // header advertised in CORS but never sent.
+      return json(response, 200, body, paymentResponseHeaders(request));
     }
     if (request.method === "POST" && url.pathname === "/api/a2mcp/evidence-manifest") {
       return json(response, 200, wrapA2McpResult("license-evidence-manifest", buildEvidenceManifest(await readJson(request))));

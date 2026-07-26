@@ -108,6 +108,52 @@ export function x402ChallengeHeaders(challenge) {
   };
 }
 
+// Clients are told to read a PAYMENT-RESPONSE header after a successful replay for the
+// status, amount and payer. The header was advertised in Access-Control-Expose-Headers
+// but never actually sent, so a caller following the protocol found nothing there.
+//
+// The status is deliberately "no_settlement_required" rather than "settled": at a zero
+// price nothing moves on chain, and reporting a settlement that did not happen would be
+// worse than reporting none.
+export function buildPaymentResponse(request) {
+  const proof = decodePaymentProof(request);
+  return {
+    x402Version: 2,
+    scheme: "exact",
+    network: config.payment.network,
+    asset: config.payment.assetAddress,
+    amount: String(config.payment.amount || "0"),
+    amountHuman: humanAmount(config.payment.amount, config.payment.assetDecimals),
+    decimals: config.payment.assetDecimals,
+    payTo: getPayToAddress(),
+    payer: proof?.authorization?.from || null,
+    nonce: proof?.authorization?.nonce || null,
+    transaction: null,
+    status: "no_settlement_required",
+    note: "Zero-fee service. The authorization was accepted and no transfer was settled on chain.",
+  };
+}
+
+export function paymentResponseHeaders(request) {
+  const encoded = Buffer.from(JSON.stringify(buildPaymentResponse(request)), "utf8").toString("base64");
+  return { "PAYMENT-RESPONSE": encoded };
+}
+
+// Reads the payer's proof out of whichever header they used. Never throws: a malformed
+// or absent proof simply yields null, because this only enriches the response and must
+// not be able to fail the request.
+function decodePaymentProof(request) {
+  const raw = getHeader(request, "payment-signature") || getHeader(request, "x-payment") || getHeader(request, "payment") || "";
+  if (!raw) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(String(raw), "base64").toString("utf8"));
+    // v2 nests the proof under `payload`; v1 carries it at the top level.
+    return decoded?.payload?.authorization ? decoded.payload : decoded;
+  } catch {
+    return null;
+  }
+}
+
 export function hasX402PaymentProof(request) {
   const authorization = getHeader(request, "authorization") || "";
   return Boolean(
