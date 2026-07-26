@@ -45,13 +45,21 @@ test("A2MCP result wrapper marks the route as x402 protected", () => {
 test("x402 challenge contains the registered X Layer USDT zero-fee accept", () => {
   const challenge = buildX402Challenge({ resource: `${config.aspBaseUrl}/api/a2mcp/media-search` });
 
-  assert.equal(challenge.x402Version, 1);
+  // v2 per the OKX A2MCP template: the resource is a top-level object rather than a
+  // bare string on each accepts entry.
+  assert.equal(challenge.x402Version, 2);
+  assert.equal(challenge.resource.url, "https://asp.zitoai.xyz/api/a2mcp/media-search");
+  assert.equal(challenge.resource.mimeType, "application/json");
+  assert.ok(challenge.resource.description, "the resource names what is being sold");
   assert.equal(challenge.accepts.length, 1);
   assert.equal(challenge.accepts[0].network, "eip155:196");
   assert.equal(challenge.accepts[0].asset, "0x779ded0c9e1022225f8e0630b35a9b54be713736");
   assert.equal(challenge.accepts[0].amount, "0");
   assert.equal(challenge.accepts[0].maxAmountRequired, "0");
-  assert.equal(challenge.accepts[0].resource.endsWith("/api/a2mcp/media-search"), true);
+  // v1 repeated the resource as a bare string on every accepts entry; v2 states it once
+  // at the top level, so the entry no longer carries it.
+  assert.equal(challenge.accepts[0].resource, undefined);
+  assert.equal(challenge.resource.url.endsWith("/api/a2mcp/media-search"), true);
   assert.equal(challenge.accepts[0].outputSchema.input.method, "POST");
 });
 

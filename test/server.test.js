@@ -49,12 +49,21 @@ test("the 402 challenge decodes to a well-formed x402 offer", async () => {
   const response = await fetch(`${base}/api/a2mcp/media-search`);
   const decoded = JSON.parse(Buffer.from(response.headers.get("payment-required"), "base64").toString("utf8"));
 
-  assert.equal(decoded.x402Version, 1);
+  // The docs are explicit that the marketplace validates this header, not the body, so
+  // the header is what has to match the v2 template.
+  assert.equal(decoded.x402Version, 2);
+  assert.equal(decoded.resource.url, "https://asp.zitoai.xyz/api/a2mcp/media-search");
+  assert.equal(decoded.resource.mimeType, "application/json");
+
   assert.equal(decoded.accepts.length, 1);
   const [offer] = decoded.accepts;
   assert.equal(offer.scheme, "exact");
   assert.match(offer.network, /^eip155:\d+$/);
   assert.match(offer.payTo, /^0x[0-9a-fA-F]{40}$/);
+  assert.equal(offer.maxTimeoutSeconds, 300);
+  assert.deepEqual(offer.extra, { name: "USD₮0", version: "1" });
+  assert.equal(offer.decimals, 6);
+  assert.equal(offer.amountHuman, "0");
   assert.equal(offer.outputSchema.input.method, "POST");
   assert.deepEqual(offer.outputSchema.input.body.required, ["query"]);
 });

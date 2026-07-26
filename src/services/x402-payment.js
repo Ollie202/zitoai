@@ -32,34 +32,36 @@ export function a2mcpBilling() {
   };
 }
 
+const SERVICE_DESCRIPTION = "ZitoAI rights aware media search";
+
 export function buildX402Challenge(options = {}) {
-  const resource = options.resource || `${config.aspBaseUrl.replace(/\/+$/, "")}/api/a2mcp/media-search`;
+  const resourceUrl = options.resource || `${config.aspBaseUrl.replace(/\/+$/, "")}/api/a2mcp/media-search`;
   const method = options.method || "POST";
+
+  // Field order and shape follow the A2MCP v2 challenge template in the OKX docs. The
+  // marketplace validates the base64 PAYMENT-REQUIRED header rather than the body, so
+  // the header is what has to match.
   const accept = {
     scheme: "exact",
     network: config.payment.network,
     asset: config.payment.assetAddress,
     amount: String(config.payment.amount || "0"),
-    maxAmountRequired: String(config.payment.amount || "0"),
-    // The scale and the human-readable price, stated rather than left to be inferred.
-    // Without these a client reconciling a listed "0 USDT" against a minimal-unit "0"
-    // has nothing to convert with, which produced "expected 0 USDT ~ ? minimal units".
-    decimals: config.payment.assetDecimals,
-    amountHuman: humanAmount(config.payment.amount, config.payment.assetDecimals),
-    maxTimeoutSeconds: config.payment.maxTimeoutSeconds,
     payTo: getPayToAddress(),
-    resource,
-    description: "ZitoAI rights aware media search",
-    mimeType: "application/json",
+    maxTimeoutSeconds: config.payment.maxTimeoutSeconds,
     // The EIP-712 domain a payer needs to sign an EIP-3009
-    // transferWithAuthorization. The challenge previously omitted these, so no valid
-    // EIP-3009 authorization could be constructed against it — which is what the OKX
-    // listing review caught. The token exposes TRANSFER_WITH_AUTHORIZATION_TYPEHASH,
-    // so EIP-3009 is the correct authorization method for it.
+    // transferWithAuthorization. Omitting it meant no valid authorization could be
+    // constructed, which is what a listing review caught. Verified against the token's
+    // on-chain DOMAIN_SEPARATOR, and identical to the values in the OKX template.
     extra: {
       name: config.payment.assetName,
       version: config.payment.assetVersion,
     },
+    // Beyond the template. maxAmountRequired keeps v1 readers working, and the scale is
+    // stated so a client never has to infer it — a reviewer's client reported
+    // "expected 0 USDT ~ ? minimal units" with nothing to convert from.
+    maxAmountRequired: String(config.payment.amount || "0"),
+    decimals: config.payment.assetDecimals,
+    amountHuman: humanAmount(config.payment.amount, config.payment.assetDecimals),
     outputSchema: {
       input: {
         type: "http",
@@ -82,7 +84,16 @@ export function buildX402Challenge(options = {}) {
   };
 
   return {
-    x402Version: 1,
+    // v2 per the OKX A2MCP template. v1 carried the resource as a bare string on each
+    // accepts entry; v2 lifts it to a top-level object, and the payer replies with
+    // PAYMENT-SIGNATURE rather than X-PAYMENT. Both proof headers are still accepted so
+    // a v1 client is not broken by the move.
+    x402Version: 2,
+    resource: {
+      url: resourceUrl,
+      description: SERVICE_DESCRIPTION,
+      mimeType: "application/json",
+    },
     error: "Payment required",
     accepts: [accept],
   };
