@@ -16,7 +16,7 @@ This folder contains the production documentation for the current ZitoAI build.
 
 ## Current production shape
 
-ZitoAI exposes one free A2MCP API service:
+ZitoAI exposes one zero-priced, official-SDK-protected A2MCP API service:
 
 ```text
 POST https://asp.zitoai.xyz/api/a2mcp/media-search
@@ -28,4 +28,4 @@ The service routes to:
 - Freesound for sound effects and ambience
 - Jamendo for music tracks
 
-The docs should stay aligned with that three-provider production boundary unless the code is intentionally expanded.
+The registered price is `0 USDT`. Calls use x402 v2 and an EIP-3009 authorization for zero minimal units before the result is returned. The docs should stay aligned with that three-provider production boundary unless the code is intentionally expanded.

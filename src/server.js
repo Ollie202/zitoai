@@ -65,19 +65,21 @@ const agentCard = {
       id: "rights-media-search",
       name: "Rights-aware media search",
       endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`,
-      price: "0 USDT",
-      pricingType: "free",
-      paymentRequired: false,
-      x402: false,
-      description: "Free rights-aware search across licensable images, sound effects, music tracks, and ambience.",
+      price: a2mcpBilling().price,
+      pricingType: a2mcpBilling().pricingType,
+      paymentRequired: true,
+      x402: true,
+      authorization: "EIP-3009 transferWithAuthorization",
+      description: "Zero-priced rights-aware search across licensable images, sound effects, music tracks, and ambience, authorized through the official OKX x402 seller SDK.",
     },
   ],
-  safety: { paymentRequiresUserConfirmation: false, legalAdvice: false },
+  safety: { paymentRequiresUserConfirmation: true, legalAdvice: false },
 };
 
-// These legacy search aliases are not the listed A2MCP service. They remain behind the
-// payment gate so the only public free search surface is the registered endpoint below.
-const GATED_PATHS = ["/api/search", "/api/agent/search"];
+// Every route that can run the paid provider/AI search pipeline is behind the same official
+// OKX middleware. Most importantly, this includes the exact endpoint registered on OKX.AI;
+// keeping the SDK only on aliases is indistinguishable from no SDK integration to reviewers.
+const GATED_PATHS = ["/api/search", "/api/agent/search", "/api/a2mcp/media-search"];
 
 // Search routes call OpenRouter and the licensing providers, so they cost real quota on
 // every hit. Cheap metadata routes are exempt.
@@ -193,10 +195,9 @@ app.get(["/api/a2mcp", "/api/a2mcp/manifest", "/.well-known/a2mcp.json"], (req, 
 app.get("/api/oauth/connections", async (req, res) => json(res, 200, { connections: await listProviderConnections(req) }));
 app.post("/api/brief", async (req, res) => json(res, 200, await normalizeBrief(req.body)));
 
-// Optional x402 gate for legacy aliases only. The listed A2MCP endpoint is intentionally
-// absent from GATED_PATHS because a free A2MCP service delivers synchronously with HTTP 200.
-// The SDK scopes itself to exactly the routes passed to createPaymentGate, so a global mount
-// is a no-op on the public service and every unrelated path.
+// Official OKX x402 middleware for the registered A2MCP endpoint and its search aliases.
+// A listed fee of zero still uses a signed EIP-3009 authorization: the amount is zero but
+// the request follows the same 402 challenge and replay flow reviewers validate.
 //
 // Missing credentials fail every gated route closed with a clear operator-facing error
 // rather than serving unauthenticated, or failing in some SDK-internal way that is hard to
@@ -359,16 +360,16 @@ const server = app.listen(config.port, async () => {
   // Loud, because without it the paid endpoint cannot verify or settle anything and will
   // refuse every call — a failure worth seeing at boot rather than from the first payer.
   const payment = paymentStatus();
-  console.log("A2MCP: free direct delivery at POST /api/a2mcp/media-search");
+  console.log(`A2MCP: official OKX x402 exact/EIP-3009 at POST /api/a2mcp/media-search, ${payment.price} per call`);
   console.log(
     isFacilitatorConfigured()
-      ? `Legacy x402 aliases: exact/EIP-3009 via @okxweb3/x402-express, ${payment.price} per call, settling via ${config.payment.baseUrl}`
-      : "Legacy x402 aliases: NOT CONFIGURED — the listed free A2MCP endpoint is unaffected",
+      ? `OKX seller SDK: configured, verifying through ${config.payment.baseUrl}`
+      : "OKX seller SDK: NOT CONFIGURED — protected routes fail closed",
   );
   // Real funds land here, so the receiving address is printed either way — and named as a
   // built-in default when PAY_TO_ADDRESS is unset, so a deployment that meant to override
   // it can see at a glance that it did not.
-  console.log(`Legacy x402 payee: ${payment.payToAddress}${payment.payToConfigured ? "" : " (built-in default, PAY_TO_ADDRESS unset)"}`);
+  console.log(`x402 payee: ${payment.payToAddress}${payment.payToConfigured ? "" : " (built-in ZitoAI wallet default)"}`);
   // Resumes the persisted spend total so a redeploy does not hand out a fresh budget.
   // Awaited here rather than at import time so a slow database never delays listening.
   const restored = await restoreSpendFromStore().catch(() => null);

@@ -30,36 +30,39 @@ test("CORS preflight is answered before the public A2MCP handler", async () => {
   assert.match(response.headers.get("access-control-allow-headers"), /x-payment/i);
 });
 
-test("the free A2MCP endpoint never turns validation errors into a payment challenge", async () => {
+test("the registered A2MCP endpoint challenges before running business validation", async () => {
   const response = await fetch(`${base}/api/a2mcp/media-search`, {
     method: "POST",
     headers: { Origin: "https://example.com", "Content-Type": "application/json" },
     body: "{}",
   });
 
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 402);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
-  assert.equal(response.headers.get("payment-required"), null);
+  assert.ok(response.headers.get("payment-required"));
 });
 
-test("the manifest declares the public endpoint as free instead of zero-fee x402", async () => {
+test("the manifest declares the public endpoint as zero-price official x402", async () => {
   const manifest = await (await fetch(`${base}/.well-known/a2mcp.json`)).json();
-  assert.equal(manifest.billing.paymentRequired, false);
-  assert.equal(manifest.billing.x402, false);
-  assert.equal(manifest.billing.pricingType, "free");
-  assert.equal(manifest.services[0].paymentRequired, false);
-  assert.equal(manifest.services[0].x402, false);
+  assert.equal(manifest.billing.paymentRequired, true);
+  assert.equal(manifest.billing.x402, true);
+  assert.equal(manifest.billing.pricingType, "zero_price_per_call");
+  assert.equal(manifest.billing.amount, "0");
+  assert.equal(manifest.billing.authorization, "EIP-3009 transferWithAuthorization");
+  assert.equal(manifest.billing.officialSdk, true);
+  assert.equal(manifest.services[0].paymentRequired, true);
+  assert.equal(manifest.services[0].x402, true);
 });
 
-test("payment headers are irrelevant to the free endpoint", async () => {
+test("the public endpoint rejects a fake payment signature", async () => {
   const response = await fetch(`${base}/api/a2mcp/media-search`, {
     method: "POST",
     headers: { "content-type": "application/json", "PAYMENT-SIGNATURE": "proof" },
     body: "{}",
   });
 
-  assert.equal(response.status, 400);
-  assert.equal(response.headers.get("payment-required"), null);
+  assert.equal(response.status, 402);
+  assert.ok(response.headers.get("payment-required"));
 });
 
 test("expensive routes are rate limited per client", async () => {
@@ -215,7 +218,8 @@ test("the root returns a service descriptor, not a page", async () => {
   assert.match(body.endpoints.agentCard, /\/\.well-known\/agent\.json$/);
   assert.match(body.endpoints.manifest, /\/\.well-known\/a2mcp\.json$/);
   assert.equal(body.billing.price, "0 USDT");
-  assert.equal(body.billing.paymentRequired, false);
+  assert.equal(body.billing.paymentRequired, true);
+  assert.equal(body.billing.authorization, "EIP-3009 transferWithAuthorization");
 });
 
 test("the endpoints the marketplace depends on all still answer", async () => {
@@ -226,7 +230,7 @@ test("the endpoints the marketplace depends on all still answer", async () => {
   assert.equal((await fetch(`${base}/.well-known/a2mcp.json`)).status, 200);
   assert.equal(
     (await fetch(`${base}/api/a2mcp/media-search`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status,
-    400,
+    402,
   );
 });
 
@@ -245,10 +249,10 @@ test("health reports the models actually in use", async () => {
   assert.equal(body.ok, true);
   assert.ok(body.brain.models.parseBrief, "health must name the parse model");
   assert.ok(body.brain.models.rankResults, "health must name the ranking model");
-  assert.equal(body.billing.paymentRequired, false);
-  assert.equal(body.billing.x402, false);
-  assert.equal(body.legacyPayment.amount, "0");
-  assert.equal(body.legacyPayment.authorization, "EIP-3009 transferWithAuthorization");
+  assert.equal(body.billing.paymentRequired, true);
+  assert.equal(body.billing.x402, true);
+  assert.equal(body.billing.amount, "0");
+  assert.equal(body.billing.authorization, "EIP-3009 transferWithAuthorization");
   // Settlement is the part that cannot work without OKX credentials, so health reports
   // whether it is actually wired rather than assuming it.
   assert.equal(typeof body.legacyPayment.facilitatorConfigured, "boolean");
@@ -264,13 +268,13 @@ test("the agent card and A2MCP manifest agree on the endpoint", async () => {
   assert.equal(cardEndpoint, manifestEndpoint, "a mismatch here would break agent discovery");
   assert.match(manifestEndpoint, /\/api\/a2mcp\/media-search$/);
   assert.equal(manifest.services[0].method, "POST");
-  assert.equal(card.services[0].paymentRequired, false);
-  assert.equal(card.services[0].x402, false);
+  assert.equal(card.services[0].paymentRequired, true);
+  assert.equal(card.services[0].x402, true);
 });
 
 // These run the same provider search and return the same product as the A2MCP route, so
 // an ungated one is a way around the gate rather than a separate feature.
-test("the sibling search routes are behind the same authorization gate", async () => {
+test("the listed route and sibling search routes share the same authorization gate", async () => {
   // A fresh client per request: these paths are rate limited, and a 429 from a bucket an
   // earlier test drained would pass the "not 200" check without proving anything.
   let client = 20;
@@ -281,7 +285,7 @@ test("the sibling search routes are behind the same authorization gate", async (
       body: JSON.stringify({ query: "rain" }),
     });
 
-  for (const path of ["/api/search", "/api/agent/search"]) {
+  for (const path of ["/api/a2mcp/media-search", "/api/search", "/api/agent/search"]) {
     const unsigned = await call(path);
     assert.equal(unsigned.status, 402, `${path} must not serve an unauthorized caller`);
     assert.ok(unsigned.headers.get("payment-required"), `${path} must answer with a challenge`);

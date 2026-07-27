@@ -58,14 +58,16 @@ export function a2mcpBilling() {
     x402: true,
     settlement: "OKX Agent Payments Protocol",
     price: priceLabel(),
-    pricingType: "per_call",
+    pricingType: "zero_price_per_call",
     scheme: "exact",
     authorization: "EIP-3009 transferWithAuthorization",
     amount: config.payment.amount,
     decimals: config.payment.assetDecimals,
     asset: config.payment.assetAddress,
     network: config.payment.network,
-    note: "Unpaid calls receive an x402 v2 402 challenge in the PAYMENT-REQUIRED header. Sign the accepts entry as an EIP-3009 transferWithAuthorization, replay the request with PAYMENT-SIGNATURE, and the settled result is returned with a PAYMENT-RESPONSE receipt.",
+    officialSdk: true,
+    sdkPackages: ["@okxweb3/x402-express", "@okxweb3/x402-core", "@okxweb3/x402-evm"],
+    note: "Unpaid calls receive an x402 v2 402 challenge in the PAYMENT-REQUIRED header. The amount is zero, but callers must still sign the EIP-3009 transferWithAuthorization and replay with PAYMENT-SIGNATURE. The official OKX seller SDK verifies the authorization before returning the result and emits PAYMENT-RESPONSE.",
   };
 }
 
@@ -81,11 +83,33 @@ function humanAmount(minimalUnits, decimals) {
   return fraction ? `${whole}.${fraction}` : whole;
 }
 
+class ZeroPriceOKXFacilitatorClient extends OKXFacilitatorClient {
+  async settle(payload, requirements) {
+    if (BigInt(requirements?.amount || "0") !== 0n) {
+      return super.settle(payload, requirements);
+    }
+
+    // There is no token transfer to broadcast for an exact amount of zero. Verification
+    // still went through OKX immediately before this method, so the EIP-3009 signature,
+    // nonce, recipient, validity window and accepted requirements have all been checked.
+    // Returning an SDK-shaped success receipt lets the official middleware complete the
+    // pay-and-replay lifecycle without fabricating an on-chain zero-value settlement.
+    return {
+      success: true,
+      status: "success",
+      transaction: "",
+      network: requirements.network,
+      payer: payload?.payload?.authorization?.from || "",
+      amount: "0",
+    };
+  }
+}
+
 let facilitatorClient = null;
 function getFacilitator() {
   if (!facilitatorClient) {
     if (!isFacilitatorConfigured()) return null;
-    facilitatorClient = new OKXFacilitatorClient({
+    facilitatorClient = new ZeroPriceOKXFacilitatorClient({
       apiKey: config.payment.apiKey,
       secretKey: config.payment.secretKey,
       passphrase: config.payment.passphrase,
@@ -138,6 +162,26 @@ function getResourceServer() {
     .onSettleFailure(async ({ paymentPayload }) => {
       const authorization = paymentPayload?.payload?.authorization;
       if (authorization?.from && authorization?.nonce) releaseNonce(authorization.from, authorization.nonce);
+    })
+    .onAfterVerify(async ({ paymentPayload, requirements }) => {
+      console.info(JSON.stringify({
+        event: "x402_authorization_verified",
+        scheme: requirements.scheme,
+        network: requirements.network,
+        amount: requirements.amount,
+        payer: paymentPayload?.payload?.authorization?.from || null,
+      }));
+    })
+    .onAfterSettle(async ({ result, requirements }) => {
+      console.info(JSON.stringify({
+        event: "x402_settlement_completed",
+        scheme: requirements.scheme,
+        network: requirements.network,
+        amount: requirements.amount,
+        status: result.status,
+        transaction: result.transaction || null,
+        zeroValue: BigInt(requirements.amount || "0") === 0n,
+      }));
     });
 
   return resourceServer;

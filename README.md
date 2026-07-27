@@ -40,7 +40,7 @@ ZitoAI does not route production search traffic to earlier prototype or research
 
 ## A2MCP service
 
-The public OKX.AI listing is a genuinely free A2MCP API service. A valid request is processed immediately and returned synchronously with HTTP `200`.
+The public OKX.AI listing remains priced at `0 USDT`. The listed endpoint is protected by the official OKX x402 seller SDK and uses an `exact` EIP-3009 authorization for `0` minimal token units.
 
 ```text
 Service name: Rights Media Search
@@ -49,7 +49,9 @@ Fee: 0 USDT
 Endpoint: https://asp.zitoai.xyz/api/a2mcp/media-search
 ```
 
-Example request:
+An unsigned request intentionally returns `HTTP 402` with a base64-encoded x402 v2 challenge in `PAYMENT-REQUIRED`. A compatible caller signs the challenge and replays the same request in `PAYMENT-SIGNATURE`; only that verified replay runs the search and returns `HTTP 200` with `PAYMENT-RESPONSE`.
+
+Inspect the challenge:
 
 ```bash
 curl -X POST https://asp.zitoai.xyz/api/a2mcp/media-search \
@@ -63,9 +65,7 @@ Check the endpoint the way a listing review does:
 npm run smoke:a2mcp -- https://asp.zitoai.xyz
 ```
 
-The endpoint is CORS-enabled for any origin and answers `OPTIONS` preflight with `204`. It never emits a zero-amount x402 challenge. This matters because a free A2MCP service is delivered through its HTTP response; it does not enter the A2A accept, submit, and complete lifecycle.
-
-The older `/api/search` and `/api/agent/search` aliases remain outside the marketplace listing and retain the optional x402 middleware. They are not required to call the listed free service.
+The endpoint is CORS-enabled for any origin and answers `OPTIONS` preflight with `204`. `/api/a2mcp/media-search`, `/api/search`, and `/api/agent/search` share the same SDK-backed authorization gate so no alias can bypass verification.
 
 ## Operational guardrails
 
@@ -111,7 +111,7 @@ There is no page to open. Check the service is up with:
 curl http://localhost:3000/api/health
 ```
 
-Exercise the listed free endpoint locally with:
+Exercise the complete challenge, EIP-3009 signature, replay, result, and receipt flow locally with:
 
 ```bash
 npm run smoke:a2mcp -- http://localhost:3000
@@ -143,7 +143,7 @@ Minimum useful production variables:
 - `JAMENDO_CLIENT_ID`
 - Supabase variables if private history and evidence storage are enabled
 - `A2MCP_SEARCH_TIMEOUT_MS` to bound the public search response time
-- OKX payment variables only if the optional legacy paid aliases are intentionally enabled
+- `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, `PAY_TO_ADDRESS`, and the explicit zero-price x402 values from `.env.example`
 
 Both OpenRouter models must support strict JSON-schema structured outputs. If a replacement model does not, `parse_brief` fails and every request silently degrades to the local parser — check `/api/health` (`brain.models`) and the `[openrouter]` log lines for `"success":false` to confirm which model is in use and why it fell back.
 
@@ -170,7 +170,7 @@ supabase/               Database migration for evidence and procurement records
 - ZitoAI does not invent licenses, receipts, or legal clearance.
 - Provider terms control the actual rights.
 - Evidence Packs record proof supplied by provider APIs, receipts, and user supplied checkout evidence. They do not create new rights.
-- Paid provider purchases remain separate from the free A2MCP search and must be backed by provider evidence. Calling the service does not license the assets it returns.
+- Paid provider purchases remain separate from the zero-priced A2MCP call and must be backed by provider evidence. Calling the service does not license the assets it returns.
 
 ## Documentation
 

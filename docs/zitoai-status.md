@@ -4,7 +4,7 @@ Last updated: 2026-07-27
 
 ## Current state
 
-ZitoAI is an OKX.AI ASP and free A2MCP API service for rights-aware media search. Valid requests return their result synchronously with HTTP `200`.
+ZitoAI is an OKX.AI ASP and zero-priced A2MCP API service for rights-aware media search. The marketplace fee remains `0 USDT`; the endpoint uses the official OKX x402 seller SDK and an EIP-3009 authorization before returning results.
 
 | Item | Status |
 |---|---|
@@ -12,8 +12,9 @@ ZitoAI is an OKX.AI ASP and free A2MCP API service for rights-aware media search
 | Agent card | Live at https://asp.zitoai.xyz/.well-known/agent.json |
 | A2MCP manifest | Live at https://asp.zitoai.xyz/.well-known/a2mcp.json |
 | Primary service endpoint | `POST https://asp.zitoai.xyz/api/a2mcp/media-search` |
-| Pricing mode | Free |
-| Payment challenge | Disabled on the listed A2MCP route |
+| Pricing mode | `0 USDT` per call |
+| Payment challenge | x402 v2 on the listed route; `exact` EIP-3009 amount `0` |
+| Seller integration | Official `@okxweb3/x402-*` SDK packages and OKX facilitator verification |
 | Active providers | Shutterstock, Freesound, Jamendo |
 | Brain layer | OpenRouter with deterministic fallback |
 | Storage | Supabase optional for private history and evidence |
@@ -33,7 +34,7 @@ ZitoAI can:
 - Generate PDF or JSON License Evidence Packs from supplied provider and transaction evidence.
 - Store private procurement history and evidence when Supabase is configured.
 - Expose an A2MCP manifest for OKX.AI registration.
-- Return results directly from the free A2MCP media-search endpoint.
+- Return results on the signed replay of the zero-priced A2MCP media-search endpoint.
 
 ## What the service does not claim
 
@@ -105,7 +106,7 @@ Before registration or production handoff:
 4. Test one image prompt against `/api/a2mcp/media-search`.
 5. Test one sound effect or ambience prompt against `/api/a2mcp/media-search`.
 6. Test one music prompt against `/api/a2mcp/media-search`.
-7. Confirm valid calls return HTTP `200`, no `PAYMENT-REQUIRED` header, an `X-Request-Id`, and a result array.
+7. Confirm an unsigned call returns `402` and `PAYMENT-REQUIRED`; confirm a signed EIP-3009 replay returns `200`, `PAYMENT-RESPONSE`, an `X-Request-Id`, and a result array.
 8. Confirm Railway has only the production variables listed in `.env.example`.
 
 ## Latest endpoint flow test
@@ -160,11 +161,14 @@ Verified end to end after the structured-output fix:
 
 Latest reviewer remediation:
 
-- The listed service is now genuinely free instead of zero-fee x402.
-- Valid POST requests execute immediately and return HTTP `200`; no payment challenge, direct-accept task, or pay-and-replay path is involved.
+- The registered fee remains `0 USDT`, but the listed endpoint now uses the official OKX seller SDK instead of bypassing payment middleware.
+- Unsigned POST requests return a standards-shaped x402 v2 `402` challenge in `PAYMENT-REQUIRED`.
+- The accepted asset is X Layer USD₮0 and the authorization is EIP-3009 `transferWithAuthorization` with amount `0`.
+- The handler runs only after OKX facilitator verification of the signed replay; it then returns the media results with `PAYMENT-RESPONSE`.
+- Zero-value settlement returns a truthful SDK-shaped zero receipt after verification and does not fabricate an on-chain token transfer.
 - Every request has an `X-Request-Id` and structured start, success, failure, duration, provider, and result-count logs.
 - `A2MCP_SEARCH_TIMEOUT_MS` bounds the synchronous request; the default is 45 seconds.
-- `npm run smoke:a2mcp -- <base-url>` checks the live response, billing metadata, result contract, trace header, and latency.
+- `npm run smoke:a2mcp -- <base-url>` creates a real signed EIP-3009 authorization with an ephemeral test account and checks the challenge, replay, receipt, result contract, and latency.
 - Old accepted marketplace tasks do not become deliverable retroactively. Verification must use a fresh call after the deployment and listing metadata update.
 - An attempted ASP-side recovery of an old accepted `paymentMode=3` job was rejected by the Onchain OS CLI itself: x402 jobs do not support ASP `deliver` or status-2 submission. The user agent obtains the endpoint result and calls `direct/complete`. Adding an on-chain submit write to this API would implement the wrong lifecycle.
 
@@ -183,14 +187,14 @@ ZitoAI helps users quickly find licensable images, sound effects, music tracks, 
 Service description:
 
 ```text
-ZitoAI provides free access to a rights-aware media search and licensing assistant. It takes a natural language request, understands the intended use, searches the most relevant provider, filters the results by media type and usage fit, and returns the strongest matches for images, sound effects, music tracks, and ambience with the licensing details needed to choose the right asset.
+ZitoAI provides zero-priced access to a rights-aware media search and licensing assistant. It takes a natural language request, understands the intended use, searches the most relevant provider, filters the results by media type and usage fit, and returns the strongest matches for images, sound effects, music tracks, and ambience with the licensing details needed to choose the right asset.
 ```
 
 ## Remaining operational work
 
-- The free A2MCP change is deployed. The live smoke check returned HTTP `200`, three results, no payment challenge, and a traced response in about 10 seconds.
+- Deploy the official-SDK zero-price remediation and run the signed production smoke check before resubmitting.
 - Keep provider tokens fresh in Railway.
 - Rotate any provider secrets that were exposed in screenshots or chat.
 - ASP #6931 already records the service as an API service with a `0 USDT` fee and the correct endpoint. No identity update is required for this fix.
-- `/api/search` and `/api/agent/search` remain optional legacy x402 aliases and are not part of the listing.
+- `/api/search` and `/api/agent/search` share the same x402 middleware so no compatibility path bypasses verification.
 - Run `npm run smoke:a2mcp -- https://asp.zitoai.xyz` before requesting another review and after future production changes.

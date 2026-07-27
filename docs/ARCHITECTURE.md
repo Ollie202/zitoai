@@ -1,6 +1,6 @@
 # ZitoAI architecture
 
-ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one free A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata synchronously over HTTP.
+ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one zero-priced A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata after an official OKX x402/EIP-3009 authorization.
 
 ## Product boundary
 
@@ -44,10 +44,10 @@ A2MCP response with results, scopes, license metadata, previews and next step
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Runtime status for brain, storage, OAuth, free-service billing and optional legacy payment mode |
+| `GET` | `/api/health` | Runtime status for brain, storage, OAuth and official x402 payment mode |
 | `GET` | `/.well-known/a2mcp.json` | OKX.AI A2MCP service manifest |
-| `POST` | `/api/a2mcp/media-search` | Primary free ASP endpoint for agents. Valid requests return results directly with HTTP 200 |
-| `POST` | `/api/search` | Legacy alias outside the marketplace listing; optionally protected by x402 |
+| `POST` | `/api/a2mcp/media-search` | Primary zero-priced ASP endpoint. Unsigned calls return 402; verified EIP-3009 replays return results |
+| `POST` | `/api/search` | Compatibility alias protected by the same x402 middleware |
 | `POST` | `/api/brief` | Brief normalization endpoint |
 | `GET` | `/api/providers` | Provider configuration status |
 | `POST` | `/api/evidence-pack` | JSON or PDF evidence export |
@@ -210,13 +210,13 @@ An Evidence Pack is proof of recorded evidence, not a replacement license.
 
 ## Service delivery mode
 
-`/api/a2mcp/media-search` is registered as a free A2MCP service. It does not return HTTP `402`, require a payment signature, or create an A2A task. A valid POST runs the search and returns the result directly with HTTP `200`.
+`/api/a2mcp/media-search` is registered with a `0 USDT` fee. It uses the official `@okxweb3/x402-express`, `@okxweb3/x402-core`, and `@okxweb3/x402-evm` packages. An unsigned POST returns an x402 v2 `402` challenge. Its `accepts` entry selects `exact`, X Layer (`eip155:196`), USD₮0, and amount `0`. The caller signs an EIP-3009 `transferWithAuthorization` and replays the request; the OKX facilitator verifies it before the search handler runs.
 
 Each request receives an `X-Request-Id`. Structured start, success, failure, duration, provider, and result-count events are written to the service log. `A2MCP_SEARCH_TIMEOUT_MS` bounds the synchronous call and returns `504` if the provider pipeline cannot finish in time.
 
-The legacy `/api/search` and `/api/agent/search` aliases retain the official OKX x402 middleware for possible future paid use. They are not advertised in the A2MCP manifest and do not affect the listed free route.
+All three search paths use the same middleware. The zero-value settlement path does not fabricate a token transfer: after OKX verification succeeds, it returns the SDK-compatible zero-value receipt because there is no token amount to broadcast.
 
-Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. A free A2MCP search does not license the provider assets it returns.
+Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. A zero-priced A2MCP call does not license the provider assets it returns.
 
 ## Security model
 
