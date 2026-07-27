@@ -190,6 +190,6 @@ ZitoAI provides free access to a rights-aware media search and licensing assista
 - Deploy and run the free A2MCP smoke check against Railway.
 - Keep provider tokens fresh in Railway.
 - Rotate any provider secrets that were exposed in screenshots or chat.
-- Update ASP #6931 so the marketplace registers the service as free HTTP/A2MCP rather than x402.
+- ASP #6931 already records the service as an API service with a `0 USDT` fee and the correct endpoint. No identity update is required for this fix.
 - `/api/search` and `/api/agent/search` remain optional legacy x402 aliases and are not part of the listing.
 - Run `npm run smoke:a2mcp -- https://asp.zitoai.xyz` after deploying, before requesting another review.
