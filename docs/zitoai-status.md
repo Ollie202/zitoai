@@ -166,6 +166,7 @@ Latest reviewer remediation:
 - `A2MCP_SEARCH_TIMEOUT_MS` bounds the synchronous request; the default is 45 seconds.
 - `npm run smoke:a2mcp -- <base-url>` checks the live response, billing metadata, result contract, trace header, and latency.
 - Old accepted marketplace tasks do not become deliverable retroactively. Verification must use a fresh call after the deployment and listing metadata update.
+- An attempted ASP-side recovery of an old accepted `paymentMode=3` job was rejected by the Onchain OS CLI itself: x402 jobs do not support ASP `deliver` or status-2 submission. The user agent obtains the endpoint result and calls `direct/complete`. Adding an on-chain submit write to this API would implement the wrong lifecycle.
 
 Honest limitation:
 
@@ -187,9 +188,9 @@ ZitoAI provides free access to a rights-aware media search and licensing assista
 
 ## Remaining operational work
 
-- Deploy and run the free A2MCP smoke check against Railway.
+- The free A2MCP change is deployed. The live smoke check returned HTTP `200`, three results, no payment challenge, and a traced response in about 10 seconds.
 - Keep provider tokens fresh in Railway.
 - Rotate any provider secrets that were exposed in screenshots or chat.
 - ASP #6931 already records the service as an API service with a `0 USDT` fee and the correct endpoint. No identity update is required for this fix.
 - `/api/search` and `/api/agent/search` remain optional legacy x402 aliases and are not part of the listing.
-- Run `npm run smoke:a2mcp -- https://asp.zitoai.xyz` after deploying, before requesting another review.
+- Run `npm run smoke:a2mcp -- https://asp.zitoai.xyz` before requesting another review and after future production changes.
