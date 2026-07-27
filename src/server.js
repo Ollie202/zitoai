@@ -122,7 +122,8 @@ app.get("/api/health", (req, res) => {
     storage: storageStatus(),
     usage: usageStoreStatus(),
     oauth: oauthStatus(),
-    payment: paymentStatus(),
+    billing: a2mcpBilling(),
+    legacyPayment: paymentStatus(),
   });
 });
 
@@ -192,13 +193,10 @@ app.get(["/api/a2mcp", "/api/a2mcp/manifest", "/.well-known/a2mcp.json"], (req, 
 app.get("/api/oauth/connections", async (req, res) => json(res, 200, { connections: await listProviderConnections(req) }));
 app.post("/api/brief", async (req, res) => json(res, 200, await normalizeBrief(req.body)));
 
-// The x402 payment gate. Mounted with no path filter: app.use(path, fn) rebases req.url
-// relative to the mount point for the duration of that middleware, and since these mount
-// paths equal the full route paths exactly, the rebased req.url the SDK would see was "/"
-// — invisible to its own internal "POST /api/a2mcp/media-search" route lookup, so it
-// always concluded no payment was required and let every request through unauthorized.
-// The SDK already scopes itself to exactly the routes passed to createPaymentGate, so a
-// global mount is both correct and sufficient — it is a no-op on every other path.
+// Optional x402 gate for legacy aliases only. The listed A2MCP endpoint is intentionally
+// absent from GATED_PATHS because a free A2MCP service delivers synchronously with HTTP 200.
+// The SDK scopes itself to exactly the routes passed to createPaymentGate, so a global mount
+// is a no-op on the public service and every unrelated path.
 //
 // Missing credentials fail every gated route closed with a clear operator-facing error
 // rather than serving unauthenticated, or failing in some SDK-internal way that is hard to
@@ -361,15 +359,16 @@ const server = app.listen(config.port, async () => {
   // Loud, because without it the paid endpoint cannot verify or settle anything and will
   // refuse every call — a failure worth seeing at boot rather than from the first payer.
   const payment = paymentStatus();
+  console.log("A2MCP: free direct delivery at POST /api/a2mcp/media-search");
   console.log(
     isFacilitatorConfigured()
-      ? `x402: exact/EIP-3009 via @okxweb3/x402-express, ${payment.price} per call, settling via ${config.payment.baseUrl}`
-      : "x402: NOT CONFIGURED — set OKX_API_KEY, OKX_SECRET_KEY and OKX_PASSPHRASE or paid calls will fail",
+      ? `Legacy x402 aliases: exact/EIP-3009 via @okxweb3/x402-express, ${payment.price} per call, settling via ${config.payment.baseUrl}`
+      : "Legacy x402 aliases: NOT CONFIGURED — the listed free A2MCP endpoint is unaffected",
   );
   // Real funds land here, so the receiving address is printed either way — and named as a
   // built-in default when PAY_TO_ADDRESS is unset, so a deployment that meant to override
   // it can see at a glance that it did not.
-  console.log(`x402: paying to ${payment.payToAddress}${payment.payToConfigured ? "" : " (built-in default, PAY_TO_ADDRESS unset)"}`);
+  console.log(`Legacy x402 payee: ${payment.payToAddress}${payment.payToConfigured ? "" : " (built-in default, PAY_TO_ADDRESS unset)"}`);
   // Resumes the persisted spend total so a redeploy does not hand out a fresh budget.
   // Awaited here rather than at import time so a slow database never delays listening.
   const restored = await restoreSpendFromStore().catch(() => null);

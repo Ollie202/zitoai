@@ -44,7 +44,7 @@ A2MCP response with results, scopes, license metadata, previews and next step
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Runtime status for brain, storage, OAuth and payment mode |
+| `GET` | `/api/health` | Runtime status for brain, storage, OAuth, free-service billing and optional legacy payment mode |
 | `GET` | `/.well-known/a2mcp.json` | OKX.AI A2MCP service manifest |
 | `POST` | `/api/a2mcp/media-search` | Primary free ASP endpoint for agents. Valid requests return results directly with HTTP 200 |
 | `POST` | `/api/search` | Legacy alias outside the marketplace listing; optionally protected by x402 |

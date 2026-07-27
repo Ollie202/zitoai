@@ -245,11 +245,13 @@ test("health reports the models actually in use", async () => {
   assert.equal(body.ok, true);
   assert.ok(body.brain.models.parseBrief, "health must name the parse model");
   assert.ok(body.brain.models.rankResults, "health must name the ranking model");
-  assert.equal(body.payment.amount, "0");
-  assert.equal(body.payment.authorization, "EIP-3009 transferWithAuthorization");
+  assert.equal(body.billing.paymentRequired, false);
+  assert.equal(body.billing.x402, false);
+  assert.equal(body.legacyPayment.amount, "0");
+  assert.equal(body.legacyPayment.authorization, "EIP-3009 transferWithAuthorization");
   // Settlement is the part that cannot work without OKX credentials, so health reports
   // whether it is actually wired rather than assuming it.
-  assert.equal(typeof body.payment.facilitatorConfigured, "boolean");
+  assert.equal(typeof body.legacyPayment.facilitatorConfigured, "boolean");
 });
 
 test("the agent card and A2MCP manifest agree on the endpoint", async () => {
