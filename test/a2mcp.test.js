@@ -4,27 +4,27 @@ import { randomBytes } from "node:crypto";
 import express from "express";
 import { privateKeyToAccount } from "viem/accounts";
 import { config } from "../src/config.js";
-import { buildA2McpManifest, wrapA2McpResult } from "../src/services/a2mcp.js";
-import { a2mcpBilling, createPaymentGate, priceLabel, setFacilitatorForTesting } from "../src/services/x402-sdk.js";
+import { a2mcpBilling, buildA2McpManifest, wrapA2McpResult } from "../src/services/a2mcp.js";
+import { createPaymentGate, priceLabel, setFacilitatorForTesting } from "../src/services/x402-sdk.js";
 import { resetNonceStore } from "../src/services/x402-nonce-store.js";
 
-test("A2MCP manifest exposes ZitoAI as an x402 ASP service provider", () => {
+test("A2MCP manifest exposes ZitoAI as a directly callable free service", () => {
   const manifest = buildA2McpManifest();
 
   assert.equal(manifest.role, "ASP");
   assert.equal(manifest.serviceType, "A2MCP");
   assert.equal(manifest.mode, "standardized_api_service");
-  assert.equal(manifest.billing.paymentRequired, true);
-  assert.equal(manifest.billing.x402, true);
-  assert.equal(manifest.billing.settlement, "OKX Agent Payments Protocol");
+  assert.equal(manifest.billing.paymentRequired, false);
+  assert.equal(manifest.billing.x402, false);
+  assert.equal(manifest.billing.settlement, "none");
   assert.equal(manifest.services.length, 1);
   assert.equal(manifest.services[0].id, "rights-media-search");
   assert.equal(manifest.services[0].endpoint.endsWith("/api/a2mcp/media-search"), true);
   assert.equal(manifest.services[0].serviceMode, "A2MCP");
-  assert.equal(manifest.services[0].paymentRequired, true);
-  assert.equal(manifest.services[0].x402, true);
-  assert.equal(manifest.services[0].settlement, "OKX Agent Payments Protocol");
-  assert.equal(manifest.services[0].pricingType, "per_call");
+  assert.equal(manifest.services[0].paymentRequired, false);
+  assert.equal(manifest.services[0].x402, false);
+  assert.equal(manifest.services[0].settlement, "none");
+  assert.equal(manifest.services[0].pricingType, "free");
   assert.equal(manifest.services[0].price, "0 USDT");
   assert.equal(manifest.safety.paymentRequiresUserConfirmation, false);
   assert.deepEqual(manifest.services[0].inputSchema.required, ["query"]);
@@ -35,14 +35,14 @@ test("A2MCP manifest exposes ZitoAI as an x402 ASP service provider", () => {
   });
 });
 
-test("A2MCP result wrapper marks the route as x402 protected", () => {
+test("A2MCP result wrapper marks the route as free and directly delivered", () => {
   const wrapped = wrapA2McpResult("rights-media-search", { count: 0 });
 
   assert.equal(wrapped.ok, true);
   assert.equal(wrapped.asp, "ZitoAI");
   assert.equal(wrapped.serviceId, "rights-media-search");
-  assert.equal(wrapped.billing.paymentRequired, true);
-  assert.equal(wrapped.billing.x402, true);
+  assert.equal(wrapped.billing.paymentRequired, false);
+  assert.equal(wrapped.billing.x402, false);
   assert.deepEqual(wrapped.result, { count: 0 });
 });
 
@@ -58,19 +58,17 @@ function humanAmountOf(minimalUnits, decimals = config.payment.assetDecimals) {
 // The advertised price and the charged price were two independent settings, so repricing
 // via OKX_PAYMENT_AMOUNT alone would keep advertising the old figure. The label is derived
 // from the amount that is actually signed and settled.
-test("the advertised price follows the amount actually charged", async () => {
+test("legacy paid aliases derive their advertised x402 price from the charged amount", async () => {
   const original = { amount: config.payment.amount, priceUsd: config.payment.priceUsd };
   try {
     config.payment.priceUsd = "";
 
     config.payment.amount = "10000";
     assert.equal(priceLabel(), "0.01 USDT");
-    assert.equal(a2mcpBilling().price, "0.01 USDT");
 
     // 0.001 USDT is 1000 minimal units at 6 decimals.
     config.payment.amount = "1000";
     assert.equal(priceLabel(), "0.001 USDT");
-    assert.equal(buildA2McpManifest().services[0].price, "0.001 USDT");
 
     config.payment.amount = "2500000";
     assert.equal(priceLabel(), "2.5 USDT");
@@ -81,6 +79,12 @@ test("the advertised price follows the amount actually charged", async () => {
   } finally {
     Object.assign(config.payment, original);
   }
+
+  // The listed A2MCP service stays genuinely free regardless of any private paid-alias
+  // configuration. A zero-price service must return HTTP 200 directly, not advertise a
+  // zero-amount x402 challenge.
+  assert.equal(a2mcpBilling().price, "0 USDT");
+  assert.equal(buildA2McpManifest().services[0].pricingType, "free");
 });
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,18 @@
-import { a2mcpBilling } from "./x402-sdk.js";
 import { config } from "../config.js";
 
 export const A2MCP_PROTOCOL_VERSION = "okx.ai.a2mcp.v1";
+
+export function a2mcpBilling() {
+  return {
+    type: "free",
+    paymentRequired: false,
+    x402: false,
+    settlement: "none",
+    price: "0 USDT",
+    pricingType: "free",
+    note: "This is a free A2MCP service. Valid POST requests return the result directly with HTTP 200; no payment challenge or payment signature is required.",
+  };
+}
 
 export function buildA2McpManifest() {
   const baseUrl = config.aspBaseUrl.replace(/\/+$/, "");
@@ -12,7 +23,7 @@ export function buildA2McpManifest() {
     role: "ASP",
     serviceType: "A2MCP",
     mode: "standardized_api_service",
-    description: "Multilingual rights-aware media search API for licensable images, sound effects, music tracks, and ambience. The A2MCP endpoint uses x402 with EIP-3009 transferWithAuthorization as the payment authorization method, so OKX agents complete the standard pay-and-replay handshake. Calls are free, and the signed EIP-3009 authorization is still required and verified.",
+    description: "Free multilingual rights-aware media search API for licensable images, sound effects, music tracks, and ambience. Valid requests return results directly without a payment challenge.",
     baseUrl,
     websiteUrl: config.publicBaseUrl.replace(/\/+$/, ""),
     billing,
@@ -28,7 +39,7 @@ export function buildA2McpManifest() {
         settlement: billing.settlement,
         paymentRequired: billing.paymentRequired,
         x402: billing.x402,
-        description: "Provides access to a multilingual rights-aware media search assistant through a free x402 A2MCP endpoint authorized with EIP-3009. It takes a natural language request in English, Nigerian languages, or other major languages, normalizes it into a provider-ready search brief, searches the right provider, filters the results by media type and usage fit, and returns strong matches with licensing details.",
+        description: "Provides free access to a multilingual rights-aware media search assistant. It takes a natural language request in English, Nigerian languages, or other major languages, normalizes it into a provider-ready search brief, searches the right provider, filters the results by media type and usage fit, and returns strong matches with licensing details.",
         inputSchema: {
           type: "object",
           required: ["query"],

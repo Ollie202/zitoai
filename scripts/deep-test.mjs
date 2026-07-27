@@ -1,62 +1,38 @@
 // Deep functional test: 30 real prompts (10 music / 10 image / 10 sound effect) across
-// different languages, each driven through the full x402 handshake against a live
-// deployment — sign a genuine EIP-3009 authorization, replay it, inspect the result.
+// different languages, each sent directly to the free A2MCP endpoint.
 //
 //   node scripts/deep-test.mjs [base-url]
-import { randomBytes } from "node:crypto";
-import { privateKeyToAccount } from "viem/accounts";
 
 const base = (process.argv[2] || "https://asp.zitoai.xyz").replace(/\/+$/, "");
 const endpoint = `${base}/api/a2mcp/media-search`;
+const timeoutMs = Number(process.env.A2MCP_SMOKE_TIMEOUT_MS || 50_000);
 
-const AUTHORIZATION_TYPES = {
-  TransferWithAuthorization: [
-    { name: "from", type: "address" },
-    { name: "to", type: "address" },
-    { name: "value", type: "uint256" },
-    { name: "validAfter", type: "uint256" },
-    { name: "validBefore", type: "uint256" },
-    { name: "nonce", type: "bytes32" },
-  ],
-};
-
-const decode = (header) => JSON.parse(Buffer.from(header, "base64").toString("utf8"));
-const encode = (value) => Buffer.from(JSON.stringify(value), "utf8").toString("base64");
-const payer = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
-
-async function getOffer() {
-  const unpaid = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-  const header = unpaid.headers.get("payment-required");
-  if (!header) throw new Error(`no PAYMENT-REQUIRED header, got ${unpaid.status}`);
-  return decode(header).accepts[0];
-}
-
-async function signedCall(offer, body) {
-  const now = Math.floor(Date.now() / 1000);
-  const authorization = {
-    from: payer.address,
-    to: offer.payTo,
-    value: offer.amount,
-    validAfter: String(now - 5),
-    validBefore: String(now + offer.maxTimeoutSeconds),
-    nonce: `0x${randomBytes(32).toString("hex")}`,
-  };
-  const signature = await payer.signTypedData({
-    domain: { name: offer.extra.name, version: offer.extra.version, chainId: Number(offer.network.split(":")[1]), verifyingContract: offer.asset },
-    types: AUTHORIZATION_TYPES,
-    primaryType: "TransferWithAuthorization",
-    message: { ...authorization, value: BigInt(authorization.value), validAfter: BigInt(authorization.validAfter), validBefore: BigInt(authorization.validBefore) },
-  });
-
+async function directCall(body) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const started = Date.now();
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json", "PAYMENT-SIGNATURE": encode({ x402Version: 2, accepted: offer, payload: { authorization, signature } }) },
-    body: JSON.stringify(body),
-  });
-  const durationMs = Date.now() - started;
-  const json = await response.json().catch(() => ({}));
-  return { status: response.status, json, durationMs };
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-request-id": `deep-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const durationMs = Date.now() - started;
+    const json = await response.json().catch(() => ({}));
+    return {
+      status: response.status,
+      json,
+      durationMs,
+      paymentRequired: response.headers.has("payment-required"),
+      requestId: response.headers.get("x-request-id"),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -103,16 +79,13 @@ const CASES = [
 
 console.log(`Deep test: ${CASES.length} prompts against ${endpoint}\n`);
 
-const offer = await getOffer();
-console.log(`Offer: amount=${offer.amount} asset=${offer.asset} network=${offer.network}\n`);
-
 const results = [];
 let index = 0;
 for (const testCase of CASES) {
   index += 1;
   const label = `[${String(index).padStart(2, "0")}/${CASES.length}] ${testCase.type.padEnd(13)} ${testCase.lang.padEnd(4)}`;
   try {
-    const { status, json, durationMs } = await signedCall(offer, {
+    const { status, json, durationMs, paymentRequired, requestId } = await directCall({
       query: testCase.query,
       assetType: testCase.assetType,
       intendedUse: "commercial_content",
@@ -120,7 +93,7 @@ for (const testCase of CASES) {
       limit: 5,
     });
 
-    const ok = status === 200;
+    const ok = status === 200 && !paymentRequired;
     const result = json?.result || {};
     const candidates = result.results || [];
     const count = typeof result.count === "number" ? result.count : candidates.length;
@@ -131,11 +104,15 @@ for (const testCase of CASES) {
     const provider = count > 0 ? (candidates[0].provider || "?") : "-";
 
     console.log(
-      `${label}  ${ok ? "OK  " : "FAIL"}  ${status}  ${String(durationMs).padStart(5)}ms  results=${count}  type=${detectedType}  lang=${sourceLanguage}  quality=${String(matchQuality).slice(0, 30)}  provider=${provider}${degraded ? "  [degraded]" : ""}`,
+      `${label}  ${ok ? "OK  " : "FAIL"}  ${status}  ${String(durationMs).padStart(5)}ms  results=${count}  type=${detectedType}  lang=${sourceLanguage}  quality=${String(matchQuality).slice(0, 30)}  provider=${provider}${degraded ? "  [degraded]" : ""}  request=${requestId || "-"}`,
     );
-    if (!ok) console.log(`         error: ${json?.error || "?"} — ${json?.message || JSON.stringify(json).slice(0, 200)}`);
+    if (!ok) {
+      console.log(
+        `         error: ${paymentRequired ? "unexpected payment challenge" : json?.error || "?"} — ${json?.message || JSON.stringify(json).slice(0, 200)}`,
+      );
+    }
 
-    results.push({ ...testCase, ok, status, durationMs, count, detectedType, sourceLanguage, matchQuality, provider, degraded });
+    results.push({ ...testCase, ok, status, durationMs, count, detectedType, sourceLanguage, matchQuality, provider, degraded, paymentRequired, requestId });
   } catch (error) {
     console.log(`${label}  FAIL  threw: ${error.message}`);
     results.push({ ...testCase, ok: false, error: error.message });

@@ -1,7 +1,8 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import { config } from "./config.js";
 import { publicProviderInfo } from "./providers/index.js";
-import { buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
+import { a2mcpBilling, buildA2McpManifest, wrapA2McpResult } from "./services/a2mcp.js";
 import { createPaymentGate, isFacilitatorConfigured, paymentStatus } from "./services/x402-sdk.js";
 import { brainStatus, normalizeBrief, restoreSpendFromStore } from "./services/openrouter.js";
 import { searchAssets } from "./services/search-service.js";
@@ -47,11 +48,7 @@ const serviceDescriptor = () => ({
     manifest: `${config.aspBaseUrl.replace(/\/+$/, "")}/.well-known/a2mcp.json`,
     health: `${config.aspBaseUrl.replace(/\/+$/, "")}/api/health`,
   },
-  payment: {
-    protocol: "OKX Agent Payments Protocol",
-    price: paymentStatus().price,
-    note: "Unpaid requests receive a 402 challenge. Sign the accepts entry as an EIP-3009 transferWithAuthorization, then POST the request again with a PAYMENT-SIGNATURE header.",
-  },
+  billing: a2mcpBilling(),
 });
 
 const agentCard = {
@@ -68,19 +65,19 @@ const agentCard = {
       id: "rights-media-search",
       name: "Rights-aware media search",
       endpoint: `${config.aspBaseUrl}/api/a2mcp/media-search`,
-      price: paymentStatus().price,
-      paymentRequired: true,
-      x402: true,
-      description: "x402 access to rights-aware search across licensable images, sound effects, music tracks, and ambience, authorized with EIP-3009.",
+      price: "0 USDT",
+      pricingType: "free",
+      paymentRequired: false,
+      x402: false,
+      description: "Free rights-aware search across licensable images, sound effects, music tracks, and ambience.",
     },
   ],
   safety: { paymentRequiresUserConfirmation: false, legalAdvice: false },
 };
 
-// Both of these run the same provider search as the A2MCP route and return the same
-// product, so they sit behind the same x402 gate — sharing the exact route config the
-// gate builds, rather than a copy that could drift.
-const GATED_PATHS = ["/api/a2mcp/media-search", "/api/search", "/api/agent/search"];
+// These legacy search aliases are not the listed A2MCP service. They remain behind the
+// payment gate so the only public free search surface is the registered endpoint below.
+const GATED_PATHS = ["/api/search", "/api/agent/search"];
 
 // Search routes call OpenRouter and the licensing providers, so they cost real quota on
 // every hit. Cheap metadata routes are exempt.
@@ -220,9 +217,38 @@ app.post("/api/search", async (req, res) => json(res, 200, await searchAssets(re
 app.post("/api/agent/search", async (req, res) =>
   json(res, 200, { ...(await searchAssets(req.body)), agent: "ZitoAI", role: "ASP", protocol: "A2MCP", paymentRequired: true, x402: true }),
 );
-app.post("/api/a2mcp/media-search", async (req, res) =>
-  json(res, 200, wrapA2McpResult("rights-media-search", await searchAssets(req.body))),
-);
+app.post("/api/a2mcp/media-search", async (req, res) => {
+  const requestId = requestTraceId(req);
+  const startedAt = Date.now();
+  logServiceEvent("a2mcp_media_search_started", {
+    requestId,
+    queryLength: String(req.body?.query || "").length,
+    assetType: req.body?.assetType || null,
+  });
+
+  try {
+    const result = await withDeadline(
+      searchAssets(req.body),
+      Number(process.env.A2MCP_SEARCH_TIMEOUT_MS || 45_000),
+    );
+    const durationMs = Date.now() - startedAt;
+    logServiceEvent("a2mcp_media_search_succeeded", {
+      requestId,
+      durationMs,
+      resultCount: result.count,
+      recommendedProvider: result.recommendedProvider,
+    });
+    res.set("X-Request-Id", requestId);
+    json(res, 200, wrapA2McpResult("rights-media-search", result));
+  } catch (error) {
+    logServiceEvent("a2mcp_media_search_failed", {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      error: error?.message || "Unknown search failure",
+    }, "error");
+    throw error;
+  }
+});
 
 app.post("/api/a2mcp/evidence-manifest", (req, res) =>
   json(res, 200, wrapA2McpResult("license-evidence-manifest", buildEvidenceManifest(req.body))),
@@ -311,6 +337,7 @@ function errorStatus(error) {
   if (/^A search query is required|Track id must be numeric|must be valid JSON|Unsupported OAuth provider/i.test(message)) return 400;
   // Shutterstock request validation: the caller can fix all of these.
   if (/^Set confirmLicense=true|^Shutterstock (imageId|customerId|licenseId|price)|^Custom Shutterstock image licenses require|^No active Shutterstock image subscription/i.test(message)) return 400;
+  if (error?.code === "A2MCP_SEARCH_TIMEOUT") return 504;
   if (error?.status && Number.isInteger(error.status)) return error.status >= 500 ? 502 : error.status;
   return 500;
 }
@@ -440,10 +467,9 @@ function securityHeaders(req, res, next) {
   next();
 }
 
-// The A2MCP endpoint is public and open to any origin: access is gated by a signed EIP-3009
-// authorization in a request header, not by where the call came from. Nothing here is
-// cookie- or session-authenticated across origins: the Supabase routes take a Bearer
-// token, so credentials are never sent ambiently and Allow-Credentials stays off.
+// The A2MCP endpoint is public and open to any origin. Nothing here is cookie- or
+// session-authenticated across origins: the Supabase routes take a Bearer token, so
+// credentials are never sent ambiently and Allow-Credentials stays off.
 function corsMiddleware(req, res, next) {
   const requested = req.headers["access-control-request-headers"];
   res.set({
@@ -451,7 +477,7 @@ function corsMiddleware(req, res, next) {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": requested || "Content-Type, Authorization, X-PAYMENT, PAYMENT-SIGNATURE",
     "Access-Control-Max-Age": "86400",
-    "Access-Control-Expose-Headers": ["PAYMENT-REQUIRED", "PAYMENT-RESPONSE", "WWW-Authenticate", "X-Evidence-SHA256", "Retry-After"].join(", "),
+    "Access-Control-Expose-Headers": ["PAYMENT-REQUIRED", "PAYMENT-RESPONSE", "WWW-Authenticate", "X-Evidence-SHA256", "X-Request-Id", "Retry-After"].join(", "),
   });
   next();
 }
@@ -504,4 +530,39 @@ function clientIp(req) {
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) return String(forwarded).split(",")[0].trim();
   return req.socket?.remoteAddress || "unknown";
+}
+
+function requestTraceId(req) {
+  const supplied = req.headers["x-request-id"] || req.headers["x-railway-request-id"];
+  return String(supplied || randomUUID()).slice(0, 128);
+}
+
+function logServiceEvent(event, fields, level = "log") {
+  const entry = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    service: "zitoai",
+    event,
+    ...fields,
+  });
+  console[level](entry);
+}
+
+async function withDeadline(promise, timeoutMs) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error("Media search timed out before a result was ready.");
+          error.code = "A2MCP_SEARCH_TIMEOUT";
+          error.status = 504;
+          reject(error);
+        }, Math.max(1_000, timeoutMs));
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

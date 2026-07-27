@@ -8,7 +8,7 @@ Production credentials belong in Railway variables, `local.env`, or `.env`. Do n
 |---|---|---|---|
 | OpenRouter | [API Keys dashboard](https://openrouter.ai/settings/keys) | `OPENROUTER_API_KEY` | Use the model-router key for the brain layer. |
 | Supabase | [Project settings](https://supabase.com/dashboard) | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Needed for auth, evidence storage and private procurement records. |
-| OKX Agent Payments Protocol | OKX Onchain OS payment setup | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, `PAY_TO_ADDRESS`, `OKX_PAYMENT_NETWORK`, `OKX_PAYMENT_TOKEN_ADDRESS`, `OKX_PAYMENT_AMOUNT`, `OKX_PAYMENT_PRICE_USD` | The A2MCP service uses x402 with EIP-3009. The three OKX credentials are **required**: the facilitator verifies every authorization, including at a price of 0, and without them the endpoint refuses every call. |
+| OKX Agent Payments Protocol | OKX Onchain OS payment setup | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE`, `PAY_TO_ADDRESS`, `OKX_PAYMENT_NETWORK`, `OKX_PAYMENT_TOKEN_ADDRESS`, `OKX_PAYMENT_AMOUNT`, `OKX_PAYMENT_PRICE_USD` | Optional and used only by the legacy paid aliases. The listed free A2MCP endpoint does not require payment credentials. |
 
 ## The three live licensing APIs
 
@@ -33,29 +33,22 @@ Production credentials belong in Railway variables, `local.env`, or `.env`. Do n
 4. Keep Shutterstock scoped for image licensing only.
 5. Keep the rest of the source tree free of dead provider wiring.
 
-## x402 values
+## Optional legacy x402 values
 
-Use these for the ASP registration:
+Do not use these to register the listed free A2MCP service. They apply only if the legacy paid aliases are intentionally exposed later:
 
 | Variable | Value |
 |---|---|
 | `OKX_PAYMENT_NETWORK` | `eip155:196` (X Layer) |
 | `OKX_PAYMENT_TOKEN_ADDRESS` | `0x779ded0c9e1022225f8e0630b35a9b54be713736` (USD₮0, EIP-3009) |
-| `OKX_PAYMENT_AMOUNT` | `0` — minimal units, 6 decimals (a free call; `10000` would be 0.01 USD₮0) |
+| `OKX_PAYMENT_AMOUNT` | Minimal units at 6 decimals; use a non-zero value for a paid service |
 | `OKX_PAYMENT_PRICE_USD` | optional — derived from the amount when unset |
 | `PAY_TO_ADDRESS` | Your Agentic Wallet or recipient wallet address |
-| `OKX_API_KEY` / `OKX_SECRET_KEY` / `OKX_PASSPHRASE` | Facilitator credentials — required |
+| `OKX_API_KEY` / `OKX_SECRET_KEY` / `OKX_PASSPHRASE` | Facilitator credentials for a paid alias |
 
-`OKX_PAYMENT_AMOUNT` must match the fee on the OKX.AI listing — a listing priced at 0
-against an endpoint charging 0.01 will not reconcile.
-
-A zero amount does not weaken the authorization. Verified against the live OKX
-facilitator: at amount 0 its `/verify` still checks the EIP-3009 signature in full,
-returning `invalid_signature` for a forged `from`, a garbage signature, or a rewritten
-`to`, and validating only an honest authorization. A caller therefore still has to produce
-a real signed EIP-3009 authorization to be served. The only difference is that nothing is
-transferred, so settlement is skipped and the receipt says `no_settlement_required` rather
-than reporting a transaction that never happened.
+A free A2MCP service should return HTTP `200` directly. Do not model a free service as a
+zero-amount x402 challenge: the marketplace's direct-accept path can accept the task without
+replaying the API call, leaving no deliverable.
 
 The EIP-712 domain (`OKX_PAYMENT_ASSET_NAME` = `USD₮0`, `OKX_PAYMENT_ASSET_VERSION` = `1`)
 is what a payer signs against. The token exposes no `version()` getter, so the version is

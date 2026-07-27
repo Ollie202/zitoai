@@ -14,9 +14,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 
 test.after(() => server.close());
 
-// Preflight previously fell through to the payment gate and answered 402, which a
-// browser reports as an opaque CORS failure — the real request was never sent.
-test("CORS preflight is answered before the payment gate", async () => {
+test("CORS preflight is answered before the public A2MCP handler", async () => {
   const response = await fetch(`${base}/api/a2mcp/media-search`, {
     method: "OPTIONS",
     headers: {
@@ -32,73 +30,36 @@ test("CORS preflight is answered before the payment gate", async () => {
   assert.match(response.headers.get("access-control-allow-headers"), /x-payment/i);
 });
 
-// Access-Control-Expose-Headers is inert without Allow-Origin, so an agent running in a
-// browser could not read the challenge it is supposed to act on.
-test("the 402 challenge is readable cross-origin", async () => {
+test("the free A2MCP endpoint never turns validation errors into a payment challenge", async () => {
   const response = await fetch(`${base}/api/a2mcp/media-search`, {
     method: "POST",
     headers: { Origin: "https://example.com", "Content-Type": "application/json" },
     body: "{}",
   });
 
-  assert.equal(response.status, 402);
+  assert.equal(response.status, 400);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
-  assert.match(response.headers.get("access-control-expose-headers"), /PAYMENT-REQUIRED/);
-  assert.ok(response.headers.get("payment-required"), "the challenge header must be present");
+  assert.equal(response.headers.get("payment-required"), null);
 });
 
-test("the 402 challenge decodes to a well-formed x402 offer", async () => {
-  const response = await fetch(`${base}/api/a2mcp/media-search`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  const decoded = JSON.parse(Buffer.from(response.headers.get("payment-required"), "base64").toString("utf8"));
-
-  // The docs are explicit that the marketplace validates this header, not the body, so
-  // the header is what has to match the v2 template.
-  assert.equal(decoded.x402Version, 2);
-  assert.equal(decoded.resource.url, "https://asp.zitoai.xyz/api/a2mcp/media-search");
-  assert.equal(decoded.resource.mimeType, "application/json");
-
-  assert.equal(decoded.accepts.length, 1);
-  const [offer] = decoded.accepts;
-  assert.equal(offer.scheme, "exact");
-  assert.match(offer.network, /^eip155:\d+$/);
-  assert.match(offer.payTo, /^0x[0-9a-fA-F]{40}$/);
-  assert.equal(offer.maxTimeoutSeconds, 300);
-
-  // The EIP-712 domain a payer signs the EIP-3009 authorization against, and nothing
-  // else: PaymentRequirements is a closed type, so anything extra here is an unknown key
-  // in the object the marketplace validates.
-  assert.deepEqual(offer.extra, { name: "USD₮0", version: "1" });
-
-  assert.match(offer.amount, /^\d+$/);
-
-  // Price scale and request shape moved off the accepts entry to the challenge's
-  // `extensions`, which is where the v2 type allows them.
-  assert.equal(decoded.extensions.decimals, 6);
-  assert.equal(decoded.extensions.amountHuman, "0");
-  assert.equal(decoded.extensions.inputSchema.method, "POST");
-  assert.deepEqual(decoded.extensions.inputSchema.body.required, ["query"]);
+test("the manifest declares the public endpoint as free instead of zero-fee x402", async () => {
+  const manifest = await (await fetch(`${base}/.well-known/a2mcp.json`)).json();
+  assert.equal(manifest.billing.paymentRequired, false);
+  assert.equal(manifest.billing.x402, false);
+  assert.equal(manifest.billing.pricingType, "free");
+  assert.equal(manifest.services[0].paymentRequired, false);
+  assert.equal(manifest.services[0].x402, false);
 });
 
-// The old gate was "is a payment header present", so any string bought a real search.
-// The SDK reports the rejection reason inside the (base64) PAYMENT-REQUIRED header rather
-// than the JSON body — the body is always {} unless a route supplies its own — so the
-// reason is read from the decoded challenge, not from response.json().
-test("an unsigned payment header does not buy a search", async () => {
+test("payment headers are irrelevant to the free endpoint", async () => {
   const response = await fetch(`${base}/api/a2mcp/media-search`, {
     method: "POST",
     headers: { "content-type": "application/json", "PAYMENT-SIGNATURE": "proof" },
-    body: JSON.stringify({ query: "rain" }),
+    body: "{}",
   });
 
-  assert.equal(response.status, 402);
-  const header = response.headers.get("payment-required");
-  assert.ok(header, "a fresh challenge comes back with the rejection");
-  const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
-  assert.ok(decoded.error, "the challenge states why the request was rejected");
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("payment-required"), null);
 });
 
 test("expensive routes are rate limited per client", async () => {
@@ -253,7 +214,8 @@ test("the root returns a service descriptor, not a page", async () => {
   assert.match(body.endpoints.mediaSearch, /\/api\/a2mcp\/media-search$/);
   assert.match(body.endpoints.agentCard, /\/\.well-known\/agent\.json$/);
   assert.match(body.endpoints.manifest, /\/\.well-known\/a2mcp\.json$/);
-  assert.ok(body.payment.price, "the descriptor states the price");
+  assert.equal(body.billing.price, "0 USDT");
+  assert.equal(body.billing.paymentRequired, false);
 });
 
 test("the endpoints the marketplace depends on all still answer", async () => {
@@ -264,7 +226,7 @@ test("the endpoints the marketplace depends on all still answer", async () => {
   assert.equal((await fetch(`${base}/.well-known/a2mcp.json`)).status, 200);
   assert.equal(
     (await fetch(`${base}/api/a2mcp/media-search`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status,
-    402,
+    400,
   );
 });
 
@@ -300,6 +262,8 @@ test("the agent card and A2MCP manifest agree on the endpoint", async () => {
   assert.equal(cardEndpoint, manifestEndpoint, "a mismatch here would break agent discovery");
   assert.match(manifestEndpoint, /\/api\/a2mcp\/media-search$/);
   assert.equal(manifest.services[0].method, "POST");
+  assert.equal(card.services[0].paymentRequired, false);
+  assert.equal(card.services[0].x402, false);
 });
 
 // These run the same provider search and return the same product as the A2MCP route, so

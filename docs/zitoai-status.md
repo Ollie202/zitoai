@@ -1,10 +1,10 @@
 # ZitoAI production status
 
-Last updated: 2026-07-20
+Last updated: 2026-07-27
 
 ## Current state
 
-ZitoAI is an OKX.AI ASP and A2MCP API service for rights-aware media search, free to call over x402 and authorized with EIP-3009 `transferWithAuthorization`.
+ZitoAI is an OKX.AI ASP and free A2MCP API service for rights-aware media search. Valid requests return their result synchronously with HTTP `200`.
 
 | Item | Status |
 |---|---|
@@ -12,8 +12,8 @@ ZitoAI is an OKX.AI ASP and A2MCP API service for rights-aware media search, fre
 | Agent card | Live at https://asp.zitoai.xyz/.well-known/agent.json |
 | A2MCP manifest | Live at https://asp.zitoai.xyz/.well-known/a2mcp.json |
 | Primary service endpoint | `POST https://asp.zitoai.xyz/api/a2mcp/media-search` |
-| Pricing mode | Zero-fee x402 |
-| Payment challenge | Enabled with amount `0` |
+| Pricing mode | Free |
+| Payment challenge | Disabled on the listed A2MCP route |
 | Active providers | Shutterstock, Freesound, Jamendo |
 | Brain layer | OpenRouter with deterministic fallback |
 | Storage | Supabase optional for private history and evidence |
@@ -33,7 +33,7 @@ ZitoAI can:
 - Generate PDF or JSON License Evidence Packs from supplied provider and transaction evidence.
 - Store private procurement history and evidence when Supabase is configured.
 - Expose an A2MCP manifest for OKX.AI registration.
-- Return a valid 402 payment challenge on unpaid A2MCP media-search requests.
+- Return results directly from the free A2MCP media-search endpoint.
 
 ## What the service does not claim
 
@@ -105,7 +105,7 @@ Before registration or production handoff:
 4. Test one image prompt against `/api/a2mcp/media-search`.
 5. Test one sound effect or ambience prompt against `/api/a2mcp/media-search`.
 6. Test one music prompt against `/api/a2mcp/media-search`.
-7. Confirm unpaid calls to `/api/a2mcp/media-search` return HTTP `402` with an `accepts` array.
+7. Confirm valid calls return HTTP `200`, no `PAYMENT-REQUIRED` header, an `X-Request-Id`, and a result array.
 8. Confirm Railway has only the production variables listed in `.env.example`.
 
 ## Latest endpoint flow test
@@ -158,29 +158,14 @@ Verified end to end after the structured-output fix:
 | `a photo of a window at sunset` | English | `window sunset` | Shutterstock |
 | `rain ambience for meditation` | English | unchanged | Freesound |
 
-Latest x402 reviewer fix:
+Latest reviewer remediation:
 
-The listing was rejected for not using EIP-3009 as the payment authorization method. It was not: the endpoint gated on the *presence* of a payment header, so `X-PAYMENT: anything` returned a real search result. No signature was recovered, no nonce tracked, no facilitator consulted.
-
-- The challenge is x402 v2, base64 in the `PAYMENT-REQUIRED` header (the marketplace validates the header, not the body).
-- The single `accepts` entry carries exactly the seven documented `PaymentRequirements` fields. `extra` is `{name, version}` — the token's EIP-712 domain, and the way the OKX SDK encodes EIP-3009. It emits `assetTransferMethod` only for assets whose method is not the default, and its registry entry for `eip155:196` declares none; the facilitator's own `/supported` lists `exact` on `eip155:196` with `extra: null` alongside a separate `permit2` variant.
-- Replays are verified: the signer is recovered over the `TransferWithAuthorization` struct against the token's EIP-712 domain, checked against the published offer, time-windowed, replay-protected on `(from, nonce)`, and then confirmed by the OKX facilitator before any work is done.
-- The accepted asset is X Layer USD₮0 `0x779ded0c9e1022225f8e0630b35a9b54be713736`, confirmed on chain to implement EIP-3009 (`TRANSFER_WITH_AUTHORIZATION_TYPEHASH` returns the canonical `0x7c7c6cdb…`; `permit()` reverts).
-- The amount is `0`, matching the free listing. Verified against the live facilitator that this does not weaken anything: at amount 0 it still returns `invalid_signature` for a forged `from`, a garbage signature or a rewritten `to`, and validates only an honest authorization. Settlement is skipped because nothing moves, and the receipt says `no_settlement_required` rather than claiming a transaction.
-- `node scripts/x402-selfcheck.mjs <base-url>` reproduces all of the above against a running deployment.
-
-Second reviewer fix — the official OKX Payment SDK:
-
-The above was protocol-correct — proven against the live facilitator and OKX's own `agent x402-check` validator (`valid: true`) — but was hand-rolled, and the next resubmission was rejected for not using the official OKX Payment SDK, which "prevents us from completing verification." The hand-rolled EIP-3009 recovery, nonce store wiring, and challenge-building in `src/services/x402-payment.js` are gone; `src/services/x402-sdk.js` is now the only payment logic this service runs, built from:
-
-- `@okxweb3/x402-express`'s `paymentMiddleware`, mounted once ahead of all three gated routes;
-- `@okxweb3/x402-evm`'s `ExactEvmScheme` for the `exact` scheme on `eip155:196` — its installed package's own `DEFAULT_STABLECOINS` table names the identical USD₮0 address, name and version this service already used, independent confirmation the values were right;
-- the same `OKXFacilitatorClient` from `@okxweb3/x402-core` already verified live;
-- one addition on top, since the SDK does not provide it: an `onBeforeVerify` hook claiming `(from, nonce)` locally before any facilitator call, closing the same replay window the hand-rolled version closed.
-
-As a seller this service now runs zero local EIP-3009 verification — confirmed by reading the installed `@okxweb3/x402-evm` package, `verifyTypedData` exists only in its facilitator-side code, never in `ExactEvmScheme`. Signature, time-window and amount checks are entirely the live facilitator's job over the network; `scripts/x402-selfcheck.mjs` and `scripts/deep-test.mjs` (30 real prompts across 10 languages, all served through the real handshake) are what actually exercise that now, not a mocked unit test.
-
-The server itself moved from raw `node:http` to Express, since `paymentMiddleware` is an Express middleware — the SDK's documented integration shape. Every other route (health, agent card, manifest, evidence pack, OAuth, procurements, rate limiting, CORS, streaming downloads) was ported behavior-for-behavior; the full test suite and both scripts were run against the migrated server, locally and in production, before resubmitting.
+- The listed service is now genuinely free instead of zero-fee x402.
+- Valid POST requests execute immediately and return HTTP `200`; no payment challenge, direct-accept task, or pay-and-replay path is involved.
+- Every request has an `X-Request-Id` and structured start, success, failure, duration, provider, and result-count logs.
+- `A2MCP_SEARCH_TIMEOUT_MS` bounds the synchronous request; the default is 45 seconds.
+- `npm run smoke:a2mcp -- <base-url>` checks the live response, billing metadata, result contract, trace header, and latency.
+- Old accepted marketplace tasks do not become deliverable retroactively. Verification must use a fresh call after the deployment and listing metadata update.
 
 Honest limitation:
 
@@ -197,15 +182,14 @@ ZitoAI helps users quickly find licensable images, sound effects, music tracks, 
 Service description:
 
 ```text
-ZitoAI provides free x402 access to a rights-aware media search and licensing assistant. It takes a natural language request, understands the intended use, searches the most relevant provider, filters the results by media type and usage fit, and returns the strongest matches for images, sound effects, music tracks, and ambience with the licensing details needed to choose the right asset.
+ZitoAI provides free access to a rights-aware media search and licensing assistant. It takes a natural language request, understands the intended use, searches the most relevant provider, filters the results by media type and usage fit, and returns the strongest matches for images, sound effects, music tracks, and ambience with the licensing details needed to choose the right asset.
 ```
 
 ## Remaining operational work
 
-- Re-run OKX x402 validation against the live Railway deployment after this fix is deployed.
+- Deploy and run the free A2MCP smoke check against Railway.
 - Keep provider tokens fresh in Railway.
 - Rotate any provider secrets that were exposed in screenshots or chat.
-- Set `OKX_API_KEY`, `OKX_SECRET_KEY` and `OKX_PASSPHRASE` in Railway — without them every paid call fails closed with `503`.
-- Keep the OKX.AI listing fee and `OKX_PAYMENT_AMOUNT` in step. Both are currently `0`; raising one without the other will not reconcile at review.
-- `/api/search` and `/api/agent/search` are gated by the same EIP-3009 authorization as the A2MCP route.
-- Run `node scripts/x402-selfcheck.mjs https://asp.zitoai.xyz` after deploying, before resubmitting for review.
+- Update ASP #6931 so the marketplace registers the service as free HTTP/A2MCP rather than x402.
+- `/api/search` and `/api/agent/search` remain optional legacy x402 aliases and are not part of the listing.
+- Run `npm run smoke:a2mcp -- https://asp.zitoai.xyz` after deploying, before requesting another review.

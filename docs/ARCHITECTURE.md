@@ -1,6 +1,6 @@
 # ZitoAI architecture
 
-ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one x402 A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata, after an EIP-3009 pay-and-replay handshake carried out through the OKX Agent Payments Protocol.
+ZitoAI is a rights-aware media search ASP for OKX.AI. It exposes one free A2MCP API service that accepts natural language media requests and returns provider-backed candidates with licensing metadata synchronously over HTTP.
 
 ## Product boundary
 
@@ -15,7 +15,7 @@ Agent or user request
 A2MCP endpoint
         |
         v
-Zero-fee x402 challenge on unpaid request
+Request validation and bounded execution
         |
         v
 Brief parser
@@ -46,8 +46,8 @@ A2MCP response with results, scopes, license metadata, previews and next step
 |---|---|---|
 | `GET` | `/api/health` | Runtime status for brain, storage, OAuth and payment mode |
 | `GET` | `/.well-known/a2mcp.json` | OKX.AI A2MCP service manifest |
-| `GET` or `POST` | `/api/a2mcp/media-search` | Primary ASP endpoint for agents. Unpaid requests return a 402 challenge. Replayed POST requests return results |
-| `POST` | `/api/search` | Same pipeline and same x402 gate as the A2MCP route |
+| `POST` | `/api/a2mcp/media-search` | Primary free ASP endpoint for agents. Valid requests return results directly with HTTP 200 |
+| `POST` | `/api/search` | Legacy alias outside the marketplace listing; optionally protected by x402 |
 | `POST` | `/api/brief` | Brief normalization endpoint |
 | `GET` | `/api/providers` | Provider configuration status |
 | `POST` | `/api/evidence-pack` | JSON or PDF evidence export |
@@ -191,7 +191,7 @@ Guardrail state lives in `public.usage_counters`, written only by the service ro
 
 When the shared limiter is enabled it is authoritative, because it sees every replica, but the in-memory window is still consulted. If the shared store is unreachable the request falls back to the local decision — deliberately neither failing open, which would remove the limit during an outage, nor failing closed, which would take the service down with the database.
 
-The A2MCP endpoint sets permissive CORS on every response including the `402`, and answers `OPTIONS` preflight with `204` before the payment gate, so browser-based agents can read the challenge.
+The A2MCP endpoint sets permissive CORS on every response and answers `OPTIONS` preflight with `204`.
 
 ## Storage and evidence
 
@@ -208,22 +208,15 @@ Evidence Packs record:
 
 An Evidence Pack is proof of recorded evidence, not a replacement license.
 
-## Payment mode
+## Service delivery mode
 
-The A2MCP service uses x402 v2, scheme `exact`, authorized with EIP-3009 `transferWithAuthorization`. The price is currently 0, which changes what settles, not what is required: a caller must still present a genuine signed authorization.
+`/api/a2mcp/media-search` is registered as a free A2MCP service. It does not return HTTP `402`, require a payment signature, or create an A2A task. A valid POST runs the search and returns the result directly with HTTP `200`.
 
-Unpaid calls to `/api/a2mcp/media-search` return HTTP `402` with the challenge base64-encoded in the `PAYMENT-REQUIRED` header (the marketplace validates the header, not the body). The single `accepts` entry names X Layer USD₮0 and the price in minimal units, and carries the token's EIP-712 domain in `extra` so a payer can construct the authorization.
+Each request receives an `X-Request-Id`. Structured start, success, failure, duration, provider, and result-count events are written to the service log. `A2MCP_SEARCH_TIMEOUT_MS` bounds the synchronous call and returns `504` if the provider pipeline cannot finish in time.
 
-The gate itself is the official OKX Payment SDK, not hand-rolled protocol code: `@okxweb3/x402-express`'s `paymentMiddleware`, wired in [src/services/x402-sdk.js](../src/services/x402-sdk.js) with `@okxweb3/x402-evm`'s `ExactEvmScheme` and the `OKXFacilitatorClient` from `@okxweb3/x402-core`. On a replay with a `PAYMENT-SIGNATURE` header:
+The legacy `/api/search` and `/api/agent/search` aliases retain the official OKX x402 middleware for possible future paid use. They are not advertised in the A2MCP manifest and do not affect the listed free route.
 
-1. the SDK's `onBeforeVerify` hook claims the `(from, nonce)` pair locally, before any network call — the one guard the SDK does not provide itself, closing the window before a settlement confirms on chain where the same signed header could otherwise be replayed;
-2. the SDK decodes the payload, matches it against the published offer, and calls the OKX facilitator's `/verify` — the facilitator recovers the EIP-712 signature and checks balance and on-chain nonce state, since as a seller this service runs no local signature verification of its own;
-3. only once verified does the wrapped route handler run the search;
-4. the SDK settles only if that handler responds under `400`, so a payer is never charged for a request that failed, and returns HTTP `200` with the result plus a `PAYMENT-RESPONSE` receipt.
-
-Any failure re-issues a fresh challenge, with the reason in the challenge's own `error` field (the JSON body is `{}` by SDK default). `createPaymentGate` returns `null` when facilitator credentials are missing, and server.js fails every gated route closed with `503` in that case rather than serving work on an unverified payment.
-
-Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. Paying the A2MCP call fee does not license the provider assets it returns.
+Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. A free A2MCP search does not license the provider assets it returns.
 
 ## Security model
 
