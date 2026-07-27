@@ -169,6 +169,19 @@ The listing was rejected for not using EIP-3009 as the payment authorization met
 - The amount is `0`, matching the free listing. Verified against the live facilitator that this does not weaken anything: at amount 0 it still returns `invalid_signature` for a forged `from`, a garbage signature or a rewritten `to`, and validates only an honest authorization. Settlement is skipped because nothing moves, and the receipt says `no_settlement_required` rather than claiming a transaction.
 - `node scripts/x402-selfcheck.mjs <base-url>` reproduces all of the above against a running deployment.
 
+Second reviewer fix — the official OKX Payment SDK:
+
+The above was protocol-correct — proven against the live facilitator and OKX's own `agent x402-check` validator (`valid: true`) — but was hand-rolled, and the next resubmission was rejected for not using the official OKX Payment SDK, which "prevents us from completing verification." The hand-rolled EIP-3009 recovery, nonce store wiring, and challenge-building in `src/services/x402-payment.js` are gone; `src/services/x402-sdk.js` is now the only payment logic this service runs, built from:
+
+- `@okxweb3/x402-express`'s `paymentMiddleware`, mounted once ahead of all three gated routes;
+- `@okxweb3/x402-evm`'s `ExactEvmScheme` for the `exact` scheme on `eip155:196` — its installed package's own `DEFAULT_STABLECOINS` table names the identical USD₮0 address, name and version this service already used, independent confirmation the values were right;
+- the same `OKXFacilitatorClient` from `@okxweb3/x402-core` already verified live;
+- one addition on top, since the SDK does not provide it: an `onBeforeVerify` hook claiming `(from, nonce)` locally before any facilitator call, closing the same replay window the hand-rolled version closed.
+
+As a seller this service now runs zero local EIP-3009 verification — confirmed by reading the installed `@okxweb3/x402-evm` package, `verifyTypedData` exists only in its facilitator-side code, never in `ExactEvmScheme`. Signature, time-window and amount checks are entirely the live facilitator's job over the network; `scripts/x402-selfcheck.mjs` and `scripts/deep-test.mjs` (30 real prompts across 10 languages, all served through the real handshake) are what actually exercise that now, not a mocked unit test.
+
+The server itself moved from raw `node:http` to Express, since `paymentMiddleware` is an Express middleware — the SDK's documented integration shape. Every other route (health, agent card, manifest, evidence pack, OAuth, procurements, rate limiting, CORS, streaming downloads) was ported behavior-for-behavior; the full test suite and both scripts were run against the migrated server, locally and in production, before resubmitting.
+
 Honest limitation:
 
 The endpoint returns provider licensing, source and checkout links. It does not claim that a paid provider purchase has happened unless a real provider license action or external checkout evidence is recorded.

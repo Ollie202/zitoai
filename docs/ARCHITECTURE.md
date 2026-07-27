@@ -214,17 +214,14 @@ The A2MCP service uses x402 v2, scheme `exact`, authorized with EIP-3009 `transf
 
 Unpaid calls to `/api/a2mcp/media-search` return HTTP `402` with the challenge base64-encoded in the `PAYMENT-REQUIRED` header (the marketplace validates the header, not the body). The single `accepts` entry names X Layer USD₮0 and the price in minimal units, and carries the token's EIP-712 domain in `extra` so a payer can construct the authorization.
 
-On replay with a `PAYMENT-SIGNATURE` header the service:
+The gate itself is the official OKX Payment SDK, not hand-rolled protocol code: `@okxweb3/x402-express`'s `paymentMiddleware`, wired in [src/services/x402-sdk.js](../src/services/x402-sdk.js) with `@okxweb3/x402-evm`'s `ExactEvmScheme` and the `OKXFacilitatorClient` from `@okxweb3/x402-core`. On a replay with a `PAYMENT-SIGNATURE` header:
 
-1. decodes the payload and checks it against the offer it published — scheme, network, asset, `payTo`, and that the signed value covers the price;
-2. checks the validity window and the nonce shape;
-3. recovers the signer over the `TransferWithAuthorization` struct against the token's EIP-712 domain, and rejects anything that does not recover to the authorization's `from`;
-4. claims the `(from, nonce)` pair, so the same signed header cannot be replayed in the window before settlement confirms on chain;
-5. asks the OKX facilitator to verify — it alone can see the payer's balance and on-chain nonce state;
-6. runs the search, and only then settles, so a payer is never charged for a request that failed;
-7. returns HTTP `200` with the result and a `PAYMENT-RESPONSE` receipt carrying the settlement status and transaction.
+1. the SDK's `onBeforeVerify` hook claims the `(from, nonce)` pair locally, before any network call — the one guard the SDK does not provide itself, closing the window before a settlement confirms on chain where the same signed header could otherwise be replayed;
+2. the SDK decodes the payload, matches it against the published offer, and calls the OKX facilitator's `/verify` — the facilitator recovers the EIP-712 signature and checks balance and on-chain nonce state, since as a seller this service runs no local signature verification of its own;
+3. only once verified does the wrapped route handler run the search;
+4. the SDK settles only if that handler responds under `400`, so a payer is never charged for a request that failed, and returns HTTP `200` with the result plus a `PAYMENT-RESPONSE` receipt.
 
-Any failure re-issues a fresh challenge alongside the error, so a client with an expired signature can retry without a second round trip. If the facilitator credentials are missing the endpoint fails closed with `503 settlement_unavailable` rather than serving work on an unverified payment.
+Any failure re-issues a fresh challenge, with the reason in the challenge's own `error` field (the JSON body is `{}` by SDK default). `createPaymentGate` returns `null` when facilitator credentials are missing, and server.js fails every gated route closed with `503` in that case rather than serving work on an unverified payment.
 
 Provider purchases, if performed later, must still be explicitly confirmed and backed by provider evidence. Paying the A2MCP call fee does not license the provider assets it returns.
 

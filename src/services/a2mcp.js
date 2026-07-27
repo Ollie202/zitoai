@@ -1,4 +1,4 @@
-import { a2mcpBilling } from "./x402-payment.js";
+import { a2mcpBilling } from "./x402-sdk.js";
 import { config } from "../config.js";
 
 export const A2MCP_PROTOCOL_VERSION = "okx.ai.a2mcp.v1";

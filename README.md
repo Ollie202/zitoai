@@ -72,11 +72,13 @@ The endpoint is CORS-enabled for any origin and answers `OPTIONS` preflight with
 
 ### Payment verification
 
-`/api/a2mcp/media-search` verifies the authorization cryptographically. It recovers the signer over the `TransferWithAuthorization` struct against the token's EIP-712 domain and rejects anything that does not recover to `from`; it checks the scheme, network, asset, recipient, signed value and validity window against the offer it published; it claims the `(from, nonce)` pair so a signed header cannot be replayed before settlement confirms on chain; and it asks the OKX facilitator to verify before serving and to settle only after the work succeeds. Missing facilitator credentials fail the request closed with `503`.
+`/api/a2mcp/media-search` is gated by the official OKX Payment SDK — `@okxweb3/x402-express`'s `paymentMiddleware`, `@okxweb3/x402-evm`'s `ExactEvmScheme`, and the `OKXFacilitatorClient` from `@okxweb3/x402-core` — wired in [src/services/x402-sdk.js](src/services/x402-sdk.js). The SDK builds and encodes the 402 challenge, extracts the `PAYMENT-SIGNATURE` payload, and calls the live OKX facilitator to verify the EIP-3009 signature and settle; this service adds one thing on top the SDK does not provide itself — a local `(from, nonce)` claim (`onBeforeVerify`), closing the window before a settlement confirms on chain where the same signed header could otherwise be replayed. Missing facilitator credentials make `createPaymentGate` return `null`, and every gated route then fails closed with `503` rather than serving unauthenticated.
 
-At the current price of 0 nothing settles, and the receipt says `no_settlement_required` rather than claiming a transaction. Raising `OKX_PAYMENT_AMOUNT` turns settlement on with no other change; the listing fee must be raised to match.
+At the current price of 0 nothing settles, and the receipt reports it accordingly rather than inventing a transaction. Raising `OKX_PAYMENT_AMOUNT` turns settlement on with no other change; the listing fee must be raised to match.
 
-`/api/search` and `/api/agent/search` run the same provider search and return the same product, so they sit behind the same gate and require the same EIP-3009 authorization. The gate lives in one place (`servePaidSearch`) rather than being copied per route, because a copy that drifted — or a route that forgot it — is a way around the gate.
+`/api/search` and `/api/agent/search` run the same provider search and return the same product, so they sit behind the same gate and require the same EIP-3009 authorization — the gate is mounted once, ahead of all three routes, rather than copied per route.
+
+An earlier version of this gate was hand-rolled (recovering the EIP-3009 signature and calling the facilitator directly) and was protocol-correct — proven against the live facilitator — but was rejected on resubmission for not using the official SDK. The SDK is now the only payment logic this service runs.
 
 ## Operational guardrails
 

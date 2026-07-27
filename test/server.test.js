@@ -36,7 +36,9 @@ test("CORS preflight is answered before the payment gate", async () => {
 // browser could not read the challenge it is supposed to act on.
 test("the 402 challenge is readable cross-origin", async () => {
   const response = await fetch(`${base}/api/a2mcp/media-search`, {
-    headers: { Origin: "https://example.com" },
+    method: "POST",
+    headers: { Origin: "https://example.com", "Content-Type": "application/json" },
+    body: "{}",
   });
 
   assert.equal(response.status, 402);
@@ -46,7 +48,11 @@ test("the 402 challenge is readable cross-origin", async () => {
 });
 
 test("the 402 challenge decodes to a well-formed x402 offer", async () => {
-  const response = await fetch(`${base}/api/a2mcp/media-search`);
+  const response = await fetch(`${base}/api/a2mcp/media-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
   const decoded = JSON.parse(Buffer.from(response.headers.get("payment-required"), "base64").toString("utf8"));
 
   // The docs are explicit that the marketplace validates this header, not the body, so
@@ -78,6 +84,9 @@ test("the 402 challenge decodes to a well-formed x402 offer", async () => {
 });
 
 // The old gate was "is a payment header present", so any string bought a real search.
+// The SDK reports the rejection reason inside the (base64) PAYMENT-REQUIRED header rather
+// than the JSON body — the body is always {} unless a route supplies its own — so the
+// reason is read from the decoded challenge, not from response.json().
 test("an unsigned payment header does not buy a search", async () => {
   const response = await fetch(`${base}/api/a2mcp/media-search`, {
     method: "POST",
@@ -86,9 +95,10 @@ test("an unsigned payment header does not buy a search", async () => {
   });
 
   assert.equal(response.status, 402);
-  assert.ok(response.headers.get("payment-required"), "a fresh challenge comes back with the rejection");
-  const body = await response.json();
-  assert.ok(["payment_required", "invalid_payload"].includes(body.error), `unexpected error ${body.error}`);
+  const header = response.headers.get("payment-required");
+  assert.ok(header, "a fresh challenge comes back with the rejection");
+  const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
+  assert.ok(decoded.error, "the challenge states why the request was rejected");
 });
 
 test("expensive routes are rate limited per client", async () => {
@@ -252,7 +262,10 @@ test("the endpoints the marketplace depends on all still answer", async () => {
   assert.equal((await fetch(`${base}/api/health`)).status, 200);
   assert.equal((await fetch(`${base}/.well-known/agent.json`)).status, 200);
   assert.equal((await fetch(`${base}/.well-known/a2mcp.json`)).status, 200);
-  assert.equal((await fetch(`${base}/api/a2mcp/media-search`)).status, 402);
+  assert.equal(
+    (await fetch(`${base}/api/a2mcp/media-search`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).status,
+    402,
+  );
 });
 
 test("the browser bootstrap endpoint is gone", async () => {
